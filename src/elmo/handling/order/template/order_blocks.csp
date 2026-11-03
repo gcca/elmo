@@ -1,0 +1,64 @@
+<%c++
+  using Rows = std::vector<std::map<std::string, std::string>>;
+  auto& o = order_blocks_tmp_stream;
+  auto& blocks = std::any_cast<Rows&>(@@["blocks"]);
+  auto& fields = std::any_cast<Rows&>(@@["fields"]);
+  auto& options = std::any_cast<Rows&>(@@["options"]);
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+%>
+<%c++ if (!blocks.empty()) { %>
+<section class="space-y-4" data-blocks>
+  <h2 class="text-lg font-semibold">Bloques adicionales</h2>
+  <div class="grid gap-4 xl:grid-cols-2">
+<%c++ for (const auto& b : blocks) { %>
+    <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4"<%c++ if (!b.at("contract_kind_id").empty()) { o << " data-contract-kind=\"" << esc(b.at("contract_kind_id")) << "\""; } %>>
+      <legend class="fieldset-legend"><%c++ o << esc(b.at("title")); %></legend>
+<%c++
+  for (const auto& f : fields) {
+    if (f.at("block_id") != b.at("id")) continue;
+    const auto& type = f.at("type");
+    const bool required = f.at("required") == "1";
+    const auto fname = "field_" + f.at("id");
+    const auto fid = "order-field-" + f.at("id");
+    const char* req = required ? " required" : "";
+    const auto label = esc(f.at("label")) + (required ? " *" : "");
+%>
+<%c++ if (type == "boolean") { %>
+      <label class="label mt-2 cursor-pointer gap-3">
+        <input type="checkbox" name="<%c++ o << fname; %>" value="1" class="toggle"<%c++ o << req; %> />
+        <%c++ o << label; %>
+      </label>
+<%c++ } else if (type == "multi_option") { %>
+      <span class="label mt-2"><%c++ o << label; %></span>
+      <div class="flex flex-wrap gap-x-4 gap-y-2">
+<%c++   for (const auto& opt : options) { if (opt.at("field_id") != f.at("id")) continue; %>
+        <label class="label cursor-pointer gap-2">
+          <input type="checkbox" name="<%c++ o << fname; %>" value="<%c++ o << esc(opt.at("id")); %>" class="checkbox checkbox-sm" />
+          <%c++ o << esc(opt.at("label")); %>
+        </label>
+<%c++   } %>
+      </div>
+<%c++ } else if (type == "option") { %>
+      <label class="label mt-2" for="<%c++ o << fid; %>"><%c++ o << label; %></label>
+      <select id="<%c++ o << fid; %>" name="<%c++ o << fname; %>" class="select w-full"<%c++ o << req; %>>
+        <option value="">Selecciona una opción</option>
+<%c++   for (const auto& opt : options) { if (opt.at("field_id") != f.at("id")) continue; %>
+        <option value="<%c++ o << esc(opt.at("id")); %>"><%c++ o << esc(opt.at("label")); %></option>
+<%c++   } %>
+      </select>
+<%c++ } else if (type == "number") { %>
+      <label class="label mt-2" for="<%c++ o << fid; %>"><%c++ o << label; %></label>
+      <input id="<%c++ o << fid; %>" type="number" step="any" name="<%c++ o << fname; %>" class="input w-full"<%c++ o << req; %> />
+<%c++ } else if (type == "date") { %>
+      <label class="label mt-2" for="<%c++ o << fid; %>"><%c++ o << label; %></label>
+      <input id="<%c++ o << fid; %>" type="date" name="<%c++ o << fname; %>" class="input w-full"<%c++ o << req; %> />
+<%c++ } else { %>
+      <label class="label mt-2" for="<%c++ o << fid; %>"><%c++ o << label; %></label>
+      <input id="<%c++ o << fid; %>" type="text" name="<%c++ o << fname; %>" class="input w-full"<%c++ o << req; %> />
+<%c++ } %>
+<%c++ } %>
+    </fieldset>
+<%c++ } %>
+  </div>
+</section>
+<%c++ } %>

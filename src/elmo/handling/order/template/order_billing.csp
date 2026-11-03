@@ -1,0 +1,41 @@
+<%c++
+  using Rows = std::vector<std::map<std::string, std::string>>;
+  auto& o = order_billing_tmp_stream;
+  auto& clients = std::any_cast<Rows&>(@@["clients"]);
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+%>
+<fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4" data-party>
+  <legend class="fieldset-legend">Facturación / cobranza</legend>
+  <div class="grid gap-3 md:grid-cols-2">
+    <div>
+      <label class="label" for="order-billing-client">Razón social</label>
+      <select id="order-billing-client" name="billing_client_id" class="select w-full" data-party-select
+              hx-get="/elmo/party/contact/options" hx-vals='js:{client_id: document.getElementById("order-billing-client").value}'
+              hx-target="#order-billing-contact" hx-swap="innerHTML">
+        <option value="">Selecciona una razón social</option>
+<%c++ for (const auto& c : clients) { %>
+        <option value="<%c++ o << esc(c.at("id")); %>" data-ruc="<%c++ o << esc(c.at("ruc")); %>"><%c++ o << esc(c.at("name")); %></option>
+<%c++ } %>
+      </select>
+    </div>
+    <div>
+      <label class="label">RUC</label>
+      <input type="text" class="input w-full" readonly tabindex="-1" data-party-info="ruc" />
+    </div>
+    <div>
+      <label class="label" for="order-billing-contact">Contacto de pago</label>
+      <select id="order-billing-contact" name="billing_contact_id" class="select w-full">
+        <option value="">Selecciona primero una razón social</option>
+      </select>
+    </div>
+    <div>
+      <label class="label" for="order-payment-terms">Condición de pago</label>
+      <input id="order-payment-terms" type="text" name="payment_terms" class="input w-full" placeholder="Ej.: 30 días fecha de factura" />
+    </div>
+  </div>
+  <div class="mt-2 flex flex-wrap items-baseline gap-2">
+    <span class="text-sm font-semibold">Pago total</span>
+    <span class="font-mono" data-sum="neto">S/ 0.00</span>
+    <span class="text-sm text-base-content/60">+ IGV</span>
+  </div>
+</fieldset>

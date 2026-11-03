@@ -1,0 +1,306 @@
+<%c++
+  using Rows = std::vector<std::map<std::string, std::string>>;
+  auto& o = rentorder_create_tmp_stream;
+  auto& contract_kinds = std::any_cast<Rows&>(@@["contract_kinds"]);
+  auto& clients = std::any_cast<Rows&>(@@["clients"]);
+  auto& today = std::any_cast<std::string&>(@@["today"]);
+  auto& year = std::any_cast<std::string&>(@@["year"]);
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  std::string ad_space_kind;
+  std::string temp_space_kind;
+  for (const auto& k : contract_kinds) {
+    if (k.at("code") == "ad_space") ad_space_kind = k.at("id");
+    if (k.at("code") == "temp_space") temp_space_kind = k.at("id");
+  }
+%>
+<form id="rentorder-form" class="space-y-6" data-order-form onsubmit="return false" novalidate>
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Orden de pedido · Alquiler</h1>
+      <p class="mt-1 text-sm text-base-content/60">Arrendamiento de espacios de publicidad y de espacios temporales</p>
+    </div>
+    <span class="badge badge-outline">Borrador</span>
+  </div>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Encabezado</legend>
+    <div class="grid gap-3 md:grid-cols-3">
+      <div>
+        <label class="label" for="rentorder-number">N° pedido</label>
+        <input id="rentorder-number" type="text" class="input w-full" readonly tabindex="-1" value="<%c++ o << esc(year); %> – se asigna al guardar" />
+      </div>
+      <div>
+        <label class="label" for="rentorder-issued-on">F. emisión *</label>
+        <input id="rentorder-issued-on" type="date" name="issued_on" class="input w-full" value="<%c++ o << esc(today); %>" required />
+      </div>
+      <div>
+        <label class="label" for="rentorder-igv">IGV %</label>
+        <input id="rentorder-igv" type="number" name="igv_percent" class="input w-full" value="18" min="0" step="1" required />
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Tipo de contrato *</legend>
+    <div class="flex flex-wrap gap-x-6 gap-y-2">
+<%c++ for (const auto& k : contract_kinds) { %>
+      <label class="label cursor-pointer gap-2 text-base-content">
+        <input type="radio" name="order_contract_kind_id" value="<%c++ o << esc(k.at("id")); %>" class="radio radio-sm" required />
+        <%c++ o << esc(k.at("name")); %>
+      </label>
+<%c++ } %>
+    </div>
+<%c++ if (contract_kinds.empty()) { %>
+    <p class="label text-warning">No hay tipos de contrato configurados.</p>
+<%c++ } %>
+  </fieldset>
+
+<%view order_parties %>
+
+  <p class="rounded-box border border-dashed border-base-300 p-4 text-sm text-base-content/60" data-kind-hint>Selecciona un tipo de contrato para ingresar el detalle.</p>
+
+  <section class="space-y-3 rounded-box border border-base-300 bg-base-100 p-4" data-lines="ad_space_line" data-contract-kind="<%c++ o << esc(ad_space_kind); %>">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="font-semibold">Arrendamiento de espacio de publicidad</h2>
+      <button type="button" class="btn btn-sm" data-line-add>Agregar fila</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Código</th>
+            <th>Elemento</th>
+            <th>Ubicación / detalle</th>
+            <th>Motivo / marca</th>
+            <th>Fecha inicio</th>
+            <th>Fecha fin</th>
+            <th>Cant. elementos</th>
+            <th>Cant. periodos</th>
+            <th>Unidad</th>
+            <th>P. unitario (S/)</th>
+            <th>P. total (S/)</th>
+            <th><span class="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody data-line-body></tbody>
+      </table>
+    </div>
+    <template data-line-template>
+      <tr>
+        <td class="text-base-content/60" data-line-number></td>
+        <td><input type="text" class="input input-sm w-24" data-col="code" /></td>
+        <td><input type="text" class="input input-sm w-36" data-col="element" /></td>
+        <td><input type="text" class="input input-sm w-44" data-col="location" /></td>
+        <td><input type="text" class="input input-sm w-36" data-col="motive" /></td>
+        <td><input type="date" class="input input-sm w-36" data-col="start_date" /></td>
+        <td><input type="date" class="input input-sm w-36" data-col="end_date" /></td>
+        <td><input type="number" class="input input-sm w-24" min="0" step="1" value="1" data-col="element_qty" data-calc="qty" /></td>
+        <td><input type="number" class="input input-sm w-24" min="0" step="1" value="1" data-col="periods" data-calc="periods" /></td>
+        <td>
+          <select class="select select-sm w-24" data-col="period_unit">
+            <option value="month">Mes</option>
+            <option value="day">Día</option>
+          </select>
+        </td>
+        <td><input type="number" class="input input-sm w-28" min="0" step="0.01" data-col="unit_price" data-calc="price" /></td>
+        <td><input type="number" class="input input-sm w-28" min="0" step="0.01" data-col="total" /></td>
+        <td>
+          <button type="button" class="btn btn-ghost btn-sm btn-square" aria-label="Eliminar fila" data-line-remove>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+            </svg>
+          </button>
+        </td>
+      </tr>
+    </template>
+  </section>
+
+  <section class="space-y-3 rounded-box border border-base-300 bg-base-100 p-4" data-lines="temp_space_line" data-contract-kind="<%c++ o << esc(temp_space_kind); %>">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <h2 class="font-semibold">Arrendamiento de espacios temporales</h2>
+      <button type="button" class="btn btn-sm" data-line-add>Agregar fila</button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Código</th>
+            <th>Ubicación / detalle</th>
+            <th>Área</th>
+            <th>Motivo / marca</th>
+            <th>Descripción</th>
+            <th>Horario</th>
+            <th>Fecha inicio</th>
+            <th>Fecha fin</th>
+            <th>Cant. días</th>
+            <th>P. total (S/)</th>
+            <th><span class="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody data-line-body></tbody>
+      </table>
+    </div>
+    <template data-line-template>
+      <tr>
+        <td class="text-base-content/60" data-line-number></td>
+        <td><input type="text" class="input input-sm w-24" data-col="code" /></td>
+        <td><input type="text" class="input input-sm w-44" data-col="location" /></td>
+        <td><input type="text" class="input input-sm w-24" data-col="area" /></td>
+        <td><input type="text" class="input input-sm w-36" data-col="motive" /></td>
+        <td><input type="text" class="input input-sm w-44" data-col="description" /></td>
+        <td><input type="text" class="input input-sm w-32" data-col="schedule" /></td>
+        <td><input type="date" class="input input-sm w-36" data-col="start_date" /></td>
+        <td><input type="date" class="input input-sm w-36" data-col="end_date" /></td>
+        <td><input type="number" class="input input-sm w-24" min="0" step="1" value="1" data-col="days" /></td>
+        <td><input type="number" class="input input-sm w-28" min="0" step="0.01" data-col="total" /></td>
+        <td>
+          <button type="button" class="btn btn-ghost btn-sm btn-square" aria-label="Eliminar fila" data-line-remove>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+            </svg>
+          </button>
+        </td>
+      </tr>
+    </template>
+  </section>
+
+  <div class="flex justify-end">
+    <dl class="grid w-full max-w-sm grid-cols-2 gap-y-1 rounded-box border border-base-300 bg-base-100 p-4 text-sm">
+      <dt class="text-base-content/60">Monto neto</dt>
+      <dd class="text-right font-mono" data-sum="neto">S/ 0.00</dd>
+      <dt class="text-base-content/60">IGV</dt>
+      <dd class="text-right font-mono" data-sum="igv">S/ 0.00</dd>
+      <dt class="font-semibold">Monto neto + IGV</dt>
+      <dd class="text-right font-mono font-semibold" data-sum="total">S/ 0.00</dd>
+    </dl>
+  </div>
+
+  <div class="grid gap-4 xl:grid-cols-2">
+    <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+      <legend class="fieldset-legend">Energía eléctrica</legend>
+      <div class="flex gap-6">
+        <label class="label cursor-pointer gap-2 text-base-content">
+          <input type="radio" name="electric_power" value="1" class="radio radio-sm" />
+          Sí
+        </label>
+        <label class="label cursor-pointer gap-2 text-base-content">
+          <input type="radio" name="electric_power" value="0" class="radio radio-sm" checked />
+          No
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4" data-party>
+      <legend class="fieldset-legend">Agencia y/o central de medios</legend>
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div class="sm:col-span-2">
+          <label class="label" for="rentorder-agency">Nombre</label>
+          <select id="rentorder-agency" name="agency_client_id" class="select w-full" data-party-select>
+            <option value="">Directo</option>
+<%c++ for (const auto& c : clients) { %>
+            <option value="<%c++ o << esc(c.at("id")); %>" data-ruc="<%c++ o << esc(c.at("ruc")); %>"><%c++ o << esc(c.at("name")); %></option>
+<%c++ } %>
+          </select>
+        </div>
+        <div>
+          <label class="label">RUC</label>
+          <input type="text" class="input w-full" readonly tabindex="-1" data-party-info="ruc" />
+        </div>
+      </div>
+    </fieldset>
+  </div>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Garantía</legend>
+    <div class="grid gap-3 md:grid-cols-3">
+      <div>
+        <span class="label">¿Aplica garantía?</span>
+        <div class="flex gap-6 pt-2">
+          <label class="label cursor-pointer gap-2 text-base-content">
+            <input type="radio" name="guarantee" value="1" class="radio radio-sm" />
+            Sí
+          </label>
+          <label class="label cursor-pointer gap-2 text-base-content">
+            <input type="radio" name="guarantee" value="0" class="radio radio-sm" checked />
+            No
+          </label>
+        </div>
+      </div>
+      <div class="md:col-span-2">
+        <label class="label" for="rentorder-guarantee-amount">Monto (S/)</label>
+        <input id="rentorder-guarantee-amount" type="number" name="guarantee_amount" class="input w-full" min="0" step="0.01" />
+      </div>
+    </div>
+    <label class="label" for="rentorder-guarantee-conditions">Condiciones</label>
+    <textarea id="rentorder-guarantee-conditions" name="guarantee_conditions" class="textarea w-full" rows="4">El monto de la Garantía será equivalente a una (1) renta.
+MALL SERVICE devolverá la garantía al Cliente dentro de un plazo máximo de siete (07) días hábiles contados desde la devolución del espacio arrendado, siempre que se haya realizado conforme a lo establecido en el presente documento y no existan obligaciones pendientes a cargo del Cliente.</textarea>
+  </fieldset>
+
+<%view order_billing %>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Observaciones</legend>
+    <textarea name="observations" class="textarea w-full" rows="3" aria-label="Observaciones">Al mes siguiente se debe enviar el EECC y luego de la aprobacion enviar la factura al buzon // La factura debe ser enviada en formato (PDF y XML) únicamente al  buzón de recepción (EMCrecepcionfacturas.peru@essencemediacom.com) y por el monto exacto detallado. </textarea>
+  </fieldset>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Términos y condiciones</legend>
+    <label class="label" for="rentorder-terms-ad-space">Arrendamiento de espacio de publicidad</label>
+    <textarea id="rentorder-terms-ad-space" name="terms_ad_space" class="textarea w-full" rows="10">ARRENDAMIENTO DE ESPACIO DE PUBLICIDAD
+
+1. El Cliente se obliga a remitir el arte en el formato y fechas pactadas con el área de publicidad de MALL SERVICE. MALL SERVICE se reserva el derecho de revisar y aprobar dicho arte. La falta de remisión oportuna del arte publicitario no será imputable a MALL SERVICE ni dará lugar a reprogramaciones, prórrogas, descuentos ni compensaciones respecto del plazo de exhibición contratado.
+
+2. Cualquier modificación del arte publicitario que el Cliente solicite durante la vigencia del plazo contratado deberá cumplir, de manera obligatoria, con lo siguiente: (a) ser previamente revisada y aprobada por escrito por MALL SERVICE
+
+3. En el caso de contratos cuya vigencia sea mayor a tres (3) meses, el Cliente reconoce y acepta que deberá renovar y/o modificar el arte publicitario, como mínimo, cada tres (3) meses, asumiendo íntegramente los costos que ello implique y sujeto, en todos los casos, a la aprobación previa de MALL SERVICE.
+
+4. En caso el Cliente no formalice por escrito su interés de renovación con una anticipación mínima de treinta (30) días calendario a la fecha de vencimiento del plazo de exhibición de la publicidad, MALL SERVICE quedará en libertad de ofrecer y disponer del espacio y/o los elementos publicitarios a favor de terceros, sin derecho a reclamo por parte del Cliente.
+
+5. El contenido del arte publicitario, incluyendo textos, imágenes, diseños, marcas, signos distintivos y demás elementos utilizados, es de exclusiva responsabilidad del Cliente. MALL SERVICE no asume responsabilidad alguna por el contenido, licitud, veracidad, derechos de autor, derechos de imagen, propiedad intelectual o cualquier derecho de terceros vinculado al arte publicitario, limitándose su participación únicamente a la producción y/o exhibición del material conforme a lo contratado.</textarea>
+    <label class="label mt-2" for="rentorder-terms-temp-space">Arrendamiento de espacios temporales</label>
+    <textarea id="rentorder-terms-temp-space" name="terms_temp_space" class="textarea w-full" rows="10">ARRENDAMIENTO DE ESPACIOS TEMPORALES
+
+1. El Cliente se obliga a remitir a MALL SERVICE, para su revisión y aprobación previa, el proyecto de diseño, volantes y/o cualquier otro insumo destinado a ser entregado a los consumidores. MALL SERVICE contará con un plazo de cinco (5) días hábiles para emitir su aprobación u observaciones. La falta de remisión oportuna del proyecto de diseño y/o actividad no será imputable a MALL SERVICE ni dará lugar a reprogramaciones, prórrogas, descuentos ni compensaciones respecto del plazo de exhibición contratado.
+
+2. Cualquier modificación del arte publicitario que el Cliente solicite durante la vigencia del plazo contratado deberá cumplir, de manera obligatoria, con lo siguiente: (a) ser previamente revisada y aprobada por escrito por MALL SERVICE; y (b) todos los costos y gastos que dicha modificación genere, incluidos pero sin limitarse, los de impresión, instalación, desinstalación, transporte, almacenamiento y seguros, serán asumidos íntegra y exclusivamente por el Cliente.
+
+3. El Cliente declara conocer y aceptar expresamente que: (a) el trámite, obtención y todos los costos asociados a la instalación, mantenimiento, licencias, permisos municipales, autorizaciones administrativas, seguros y demás requisitos aplicables serán asumidos por su cuenta y costo; y (b) se obliga a mantener indemne y liberar de toda responsabilidad a MALL SERVICE frente a cualquier daño, contingencia, sanción, reclamo y/o acción de terceros que pudiera producirse en el área intervenida, durante la vigencia del presente contrato.
+
+4. El Cliente deberá respetar estrictamente el horario autorizado por MALL SERVICE, así como destinar el área autorizada única y exclusivamente para el fin previamente aprobado. En ningún caso podrá utilizar un espacio distinto ni destinar el área autorizada a un uso diferente sin autorización expresa y por escrito de MALL SERVICE. En caso el Cliente incumpla el horario autorizado, deberá pagar a favor de MALL SERVICE una penalidad equivalente al diez por ciento (10%) de la contraprestación total pactada por cada hora o fracción de hora de incumplimiento, sin perjuicio de la obligación de cesar inmediatamente la actividad y/o retirar los bienes correspondientes a solo requerimiento de MALL SERVICE. El incumplimiento de lo dispuesto en el presente numeral facultará a MALL SERVICE a resolver el contrato de pleno derecho, sin perjuicio de las demás acciones que correspondan. 
+
+5. La instalación deberá realizarse durante la noche inmediatamente anterior al inicio del plazo de arrendamiento, y la desinstalación deberá efectuarse durante la misma noche en que dicho plazo culmine, en los horarios previamente autorizados por MALL SERVICE. En caso el Cliente requiera un plazo adicional para la instalación y/o desinstalación, este deberá ser previamente autorizado por MALL SERVICE y estará sujeto al pago de la contraprestación adicional que este determine.
+
+6. Cuando la actividad contratada requiera de permisos, licencias o evaluaciones de seguridad específicas ante la municipalidad correspondiente (incluyendo, entre otras, la Evaluación de las Condiciones de Seguridad en Espectáculos Públicos Deportivos y No Deportivos - ECSE), el Cliente deberá remitir a MALL SERVICE copia de dichas autorizaciones con una anticipación mínima de dos (2) días hábiles al inicio de la actividad. La falta de entrega oportuna de dicha documentación facultará a MALL SERVICE a suspender o cancelar la actividad, sin que ello genere derecho a reprogramación, descuento, indemnización ni compensación alguna a favor del Cliente.</textarea>
+  </fieldset>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Penalidades</legend>
+    <textarea name="penalties" class="textarea w-full" rows="8" aria-label="Penalidades">(i) El Cliente reconoce y acepta que el desistimiento del Contrato en cualquier etapa generará automáticamente una penalidad equivalente al 50% del monto total contratado. Dicho desistimiento deberá ser comunicado a MALL SERVICE con una anticipación no menor de sesenta (60) días calendario, y la penalidad correspondiente deberá ser pagada dentro del plazo que MALL SERVICE indique para tal efecto. El incumplimiento en el pago oportuno de la penalidad antes señalada generará la aplicación de intereses moratorios y compensatorios, calculados a la tasa máxima permitida por el Banco Central de Reserva del Perú (BCRP), por cada día de retraso, hasta su cancelación total.
+
+(ii) El Cliente declara y acepta que, en caso de mora, retraso y/o incumplimiento de las condiciones de pago pactadas, se encontrará obligado a pagar una penalidad equivalente al cinco 5% del costo total del servicio por cada día calendario de retraso, la cual se devengará de manera automática desde el primer día de mora y hasta la cancelación total de lo adeudado.</textarea>
+  </fieldset>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Otras condiciones</legend>
+    <textarea name="other_conditions" class="textarea w-full" rows="6" aria-label="Otras condiciones">(i) El espacio arrendado podrá ser reubicado, total o parcialmente, previo acuerdo expreso y por escrito entre las partes.
+
+(ii) El Cliente es exclusiva y directamente responsable de que el contenido de la publicidad cumpla con la normativa vigente en la República del Perú, incluyendo las disposiciones sobre protección al consumidor, publicidad, libre competencia y derechos de autor, así como con las buenas costumbres, la moral y el orden público. En caso de incumplimiento, MALL SERVICE quedará facultado a resolver el Contrato de pleno derecho, sin derecho a reembolso, compensación ni indemnización alguna a favor del Cliente, manteniéndolo indemne frente a cualquier sanción, multa, reclamo, denuncia o acción legal que pudiera interponerse </textarea>
+  </fieldset>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Resolución</legend>
+    <textarea name="resolution" class="textarea w-full" rows="6" aria-label="Resolución">El incumplimiento de cualquiera de las condiciones establecidas en la Orden de Pedido por parte del Cliente facultará a MALL SERVICE a resolver de manera unilateral y automática el presente documento, sin obligación de pago de penalidad, indemnización ni compensación alguna a favor del Cliente, de conformidad con lo previsto en el artículo 1430 del Código Civil. 
+
+Asimismo, ya sea como consecuencia del incumplimiento en el pago, por cualquier otro incumplimiento contractual, o por la eventual resolución del contrato por cualquier causa, MALL SERVICE podrá retirar los bienes, suspender el servicio y/o retirar o dejar sin efecto el espacio publicitario contratado, sin que ello genere derecho alguno a reembolso o compensación.</textarea>
+  </fieldset>
+
+<%view order_blocks %>
+
+  <div class="flex flex-wrap items-center justify-end gap-3 border-t border-base-300 pt-4">
+    <span class="text-sm text-base-content/60">El guardado estará disponible próximamente.</span>
+    <button type="submit" class="btn btn-primary" disabled>Guardar</button>
+  </div>
+</form>
+<%view order_script %>

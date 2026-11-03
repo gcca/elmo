@@ -1,0 +1,109 @@
+<script>
+  (function () {
+    var form = document.querySelector('form[data-order-form]');
+    if (!form || form.dataset.ready) return;
+    form.dataset.ready = '1';
+
+    function num(el) {
+      var v = parseFloat(el ? el.value : '');
+      return isNaN(v) ? 0 : v;
+    }
+
+    function money(v) {
+      return 'S/ ' + v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function fillParty(select) {
+      var box = select.closest('[data-party]');
+      if (!box) return;
+      var opt = select.selectedOptions[0];
+      box.querySelectorAll('[data-party-info]').forEach(function (input) {
+        input.value = opt && opt.value ? (opt.dataset[input.dataset.partyInfo] || '') : '';
+      });
+    }
+
+    function totals() {
+      var neto = 0;
+      form.querySelectorAll('[data-lines]').forEach(function (section) {
+        if (section.hidden) return;
+        section.querySelectorAll('[data-line-body] [data-col="total"]').forEach(function (input) {
+          neto += num(input);
+        });
+      });
+      var igv = neto * num(form.querySelector('[name="igv_percent"]')) / 100;
+      form.querySelectorAll('[data-sum="neto"]').forEach(function (el) { el.textContent = money(neto); });
+      form.querySelectorAll('[data-sum="igv"]').forEach(function (el) { el.textContent = money(igv); });
+      form.querySelectorAll('[data-sum="total"]').forEach(function (el) { el.textContent = money(neto + igv); });
+    }
+
+    function renumber(section) {
+      var prefix = section.dataset.lines;
+      var rows = section.querySelectorAll('[data-line-body] tr');
+      rows.forEach(function (row, i) {
+        row.querySelectorAll('[data-col]').forEach(function (input) {
+          input.name = prefix + '[' + i + '][' + input.dataset.col + ']';
+        });
+        var n = row.querySelector('[data-line-number]');
+        if (n) n.textContent = String(i + 1);
+      });
+      var empty = section.querySelector('[data-line-empty]');
+      if (empty) empty.hidden = rows.length > 0;
+    }
+
+    function addRow(section) {
+      var tpl = section.querySelector('template[data-line-template]');
+      section.querySelector('[data-line-body]').appendChild(tpl.content.cloneNode(true));
+      renumber(section);
+      totals();
+    }
+
+    function computeRow(row) {
+      var price = row.querySelector('[data-calc="price"]');
+      if (!price) return;
+      var total = num(row.querySelector('[data-calc="qty"]')) * num(row.querySelector('[data-calc="periods"]')) * num(price);
+      row.querySelector('[data-col="total"]').value = total.toFixed(2);
+    }
+
+    function applyKind() {
+      var checked = form.querySelector('input[name="order_contract_kind_id"]:checked');
+      var kind = checked ? checked.value : '';
+      form.querySelectorAll('[data-contract-kind]').forEach(function (el) {
+        var on = el.dataset.contractKind === kind;
+        el.hidden = !on;
+        el.querySelectorAll('input, select, textarea').forEach(function (input) { input.disabled = !on; });
+      });
+      var hint = form.querySelector('[data-kind-hint]');
+      if (hint) hint.hidden = kind !== '';
+      totals();
+    }
+
+    form.addEventListener('change', function (e) {
+      if (e.target.matches('[data-party-select]')) fillParty(e.target);
+      if (e.target.name === 'order_contract_kind_id') applyKind();
+    });
+
+    form.addEventListener('input', function (e) {
+      if (e.target.matches('[data-calc]')) computeRow(e.target.closest('tr'));
+      totals();
+    });
+
+    form.addEventListener('click', function (e) {
+      var add = e.target.closest('[data-line-add]');
+      if (add) {
+        addRow(add.closest('[data-lines]'));
+        return;
+      }
+      var remove = e.target.closest('[data-line-remove]');
+      if (remove) {
+        var section = remove.closest('[data-lines]');
+        remove.closest('tr').remove();
+        renumber(section);
+        totals();
+      }
+    });
+
+    form.querySelectorAll('[data-lines]').forEach(addRow);
+    form.querySelectorAll('[data-party-select]').forEach(fillParty);
+    applyKind();
+  })();
+</script>
