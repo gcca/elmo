@@ -1,0 +1,114 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  using Rows = std::vector<Row>;
+  auto& o = form_block_edit_tmp_stream;
+  const auto& mode = @@.get<std::string>("mode");
+  const auto& block = @@.get<Row>("block");
+  const auto& rent_kinds = @@.get<Rows>("rent_kinds");
+  const auto& production_kinds = @@.get<Rows>("production_kinds");
+  const auto& errors = @@.get<Row>("errors");
+  const auto& error = @@.get<std::string>("error");
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  auto at = [](const Row& r, const std::string& k) { auto it = r.find(k); return it == r.end() ? std::string() : it->second; };
+  auto nav = [](const std::string& url) { return "href=\"/elmo/home?t=formblock\" hx-get=\"" + url + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=formblock\""; };
+  const bool creating = mode != "edit";
+  const auto id = esc(at(block, "id"));
+  const auto action = creating ? std::string("/elmo/form/block/create") : "/elmo/form/block/" + id + "/edit";
+  const auto back = creating ? std::string("/elmo/form/block/list") : "/elmo/form/block/" + id + "/details";
+  auto err = [&](const std::string& k) {
+    const auto e = at(errors, k);
+    if (!e.empty()) o << "<p class=\"label text-error\">" << esc(e) << "</p>";
+  };
+  auto invalid = [&](const std::string& k) { return errors.contains(k) ? " input-error" : ""; };
+  auto checked = [&](const std::string& k) { return at(block, k) == "1" ? " checked" : ""; };
+%>
+<form class="space-y-6" hx-post="<%c++ o << action; %>" hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=formblock" novalidate>
+  <div class="breadcrumbs text-sm">
+    <ul>
+      <li><a <%c++ o << nav("/elmo/form/block/list"); %>>Bloques dinámicos</a></li>
+<%c++ if (!creating) { %>
+      <li><a <%c++ o << nav(back); %>><%c++ o << esc(at(block, "title")); %></a></li>
+<%c++ } %>
+      <li><%c++ o << (creating ? "Nuevo bloque" : "Editar"); %></li>
+    </ul>
+  </div>
+
+  <h1 class="text-2xl font-bold"><%c++ o << (creating ? "Nuevo bloque" : "Editar bloque"); %></h1>
+
+<%c++ if (!error.empty()) { %>
+  <div role="alert" class="alert alert-error alert-soft"><%c++ o << esc(error); %></div>
+<%c++ } %>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Datos del bloque</legend>
+    <div class="grid gap-3 md:grid-cols-2">
+      <div>
+        <label class="label" for="block-title">Título *</label>
+        <input id="block-title" type="text" name="title" class="input w-full<%c++ o << invalid("title"); %>" value="<%c++ o << esc(at(block, "title")); %>" maxlength="200" required />
+<%c++ err("title"); %>
+      </div>
+      <div>
+        <label class="label" for="block-code">Código *</label>
+        <input id="block-code" type="text" name="code" class="input w-full font-mono<%c++ o << invalid("code"); %>" value="<%c++ o << esc(at(block, "code")); %>" maxlength="64" pattern="[a-z0-9_]+" required />
+<%c++ if (errors.contains("code")) { err("code"); } else { %>
+        <p class="label">Minúsculas, números y _; identifica el bloque de forma única.</p>
+<%c++ } %>
+      </div>
+      <div class="md:col-span-2">
+        <label class="label" for="block-help-text">Texto de ayuda</label>
+        <textarea id="block-help-text" name="help_text" class="textarea w-full<%c++ o << invalid("help_text"); %>" rows="3" maxlength="500" placeholder="Explica qué valor se registra; se muestra como ayuda en la orden de pedido"><%c++ o << esc(at(block, "help_text")); %></textarea>
+<%c++ err("help_text"); %>
+      </div>
+    </div>
+    <label class="label mt-2 cursor-pointer gap-3 text-base-content">
+      <input type="checkbox" name="active" value="1" class="toggle toggle-sm"<%c++ o << checked("active"); %> />
+      Activo
+    </label>
+  </fieldset>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Formularios donde aparece</legend>
+    <p class="label">Elige en qué órdenes de pedido se muestra el bloque y, si quieres, limítalo a un tipo de contrato.</p>
+    <div class="grid gap-4 lg:grid-cols-2">
+<%c++
+  for (const auto& [fam, fam_label] : {std::pair<std::string, std::string>{"rent", "Alquiler"}, std::pair<std::string, std::string>{"production", "Producción"}}) {
+    const auto& kinds = fam == "rent" ? rent_kinds : production_kinds;
+    const auto selected_kind = at(block, fam + "_contract_kind_id");
+%>
+      <div class="space-y-2 rounded-box border border-base-300 p-4">
+        <label class="label cursor-pointer gap-3 text-base-content">
+          <input type="checkbox" name="<%c++ o << fam; %>_enabled" value="1" class="checkbox checkbox-sm"<%c++ o << checked(fam + "_enabled"); %> />
+          <span class="font-semibold"><%c++ o << fam_label; %></span>
+        </label>
+<%c++ err(fam + "_enabled"); %>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <div class="sm:col-span-2">
+            <label class="label" for="block-<%c++ o << fam; %>-kind">Tipo de contrato</label>
+            <select id="block-<%c++ o << fam; %>-kind" name="<%c++ o << fam; %>_contract_kind_id" class="select w-full<%c++ o << invalid(fam + "_contract_kind_id"); %>">
+              <option value="">Todos</option>
+<%c++ for (const auto& k : kinds) { %>
+              <option value="<%c++ o << esc(at(k, "id")); %>"<%c++ if (at(k, "id") == selected_kind) { o << " selected"; } %>><%c++ o << esc(at(k, "name")); %></option>
+<%c++ } %>
+            </select>
+<%c++ err(fam + "_contract_kind_id"); %>
+          </div>
+          <div>
+            <label class="label" for="block-<%c++ o << fam; %>-position">Posición</label>
+            <input id="block-<%c++ o << fam; %>-position" type="number" step="1" name="<%c++ o << fam; %>_position" class="input w-full<%c++ o << invalid(fam + "_position"); %>" value="<%c++ o << esc(at(block, fam + "_position")); %>" />
+<%c++ err(fam + "_position"); %>
+          </div>
+        </div>
+        <label class="label cursor-pointer gap-3 text-base-content">
+          <input type="checkbox" name="<%c++ o << fam; %>_active" value="1" class="toggle toggle-sm"<%c++ o << checked(fam + "_active"); %> />
+          Asignación activa
+        </label>
+      </div>
+<%c++ } %>
+    </div>
+  </fieldset>
+
+  <div class="flex flex-wrap items-center justify-end gap-3 border-t border-base-300 pt-4">
+    <a class="btn btn-ghost" <%c++ o << nav(back); %>>Cancelar</a>
+    <button type="submit" class="btn btn-primary">Guardar</button>
+  </div>
+</form>

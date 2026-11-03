@@ -1,0 +1,55 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  auto& o = help_edit_tmp_stream;
+  const auto& entry = @@.get<Row>("entry");
+  const auto& error = @@.get<std::string>("error");
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  auto at = [](const Row& r, const char* k) { auto it = r.find(k); return it == r.end() ? std::string() : it->second; };
+  auto nav = [](const std::string& url) { return "href=\"/elmo/home?t=fieldhelp\" hx-get=\"" + url + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=fieldhelp\""; };
+  const auto text = at(entry, "help_text");
+%>
+<form class="space-y-6" hx-post="/elmo/help/manage/edit" hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=fieldhelp" novalidate data-help-edit>
+  <div class="breadcrumbs text-sm">
+    <ul>
+      <li><a <%c++ o << nav("/elmo/help/manage/list"); %>>Ayudas de campos</a></li>
+      <li><%c++ o << esc(at(entry, "label")); %></li>
+    </ul>
+  </div>
+
+  <div>
+    <h1 class="text-2xl font-bold">Editar ayuda</h1>
+    <p class="mt-1 text-sm text-base-content/60"><%c++ o << esc(at(entry, "section")); %> · <span class="font-semibold text-base-content"><%c++ o << esc(at(entry, "label")); %></span></p>
+  </div>
+
+<%c++ if (!error.empty()) { %>
+  <div role="alert" class="alert alert-error alert-soft"><%c++ o << esc(error); %></div>
+<%c++ } %>
+
+  <input type="hidden" name="key" value="<%c++ o << esc(at(entry, "key")); %>" />
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Texto de ayuda</legend>
+    <label class="sr-only" for="help-edit-text">Texto de ayuda</label>
+    <textarea id="help-edit-text" name="help_text" class="textarea w-full<%c++ o << (error.empty() ? "" : " textarea-error"); %>" rows="4" maxlength="500" placeholder="Describe qué valor se registra en este campo"><%c++ o << esc(text); %></textarea>
+    <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-base-content/60">
+      <span>Déjalo vacío para quitar la ayuda.</span>
+      <span data-help-edit-count></span>
+    </div>
+  </fieldset>
+
+  <div class="flex flex-wrap items-center justify-end gap-3 border-t border-base-300 pt-4">
+    <a class="btn btn-ghost" <%c++ o << nav("/elmo/help/manage/list"); %>>Cancelar</a>
+    <button type="submit" class="btn btn-primary">Guardar</button>
+  </div>
+</form>
+<script>
+  (function () {
+    var form = document.querySelector('[data-help-edit]');
+    if (!form) return;
+    var input = form.querySelector('textarea');
+    var count = form.querySelector('[data-help-edit-count]');
+    function update() { count.textContent = Array.from(input.value).length + ' / 500'; }
+    input.addEventListener('input', update);
+    update();
+    input.focus();
+  })();
+</script>

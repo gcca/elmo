@@ -1,0 +1,760 @@
+<script>
+  (function () {
+    var form = document.querySelector('form[data-order-form]');
+    if (!form || form.dataset.ready) return;
+    form.dataset.ready = '1';
+
+    function num(el) {
+      var v = parseFloat(el ? el.value : '');
+      return isNaN(v) ? 0 : v;
+    }
+
+    function money(v) {
+      return 'S/ ' + v.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function fillParty(select) {
+      var box = select.closest('[data-party]');
+      if (!box) return;
+      var opt = select.selectedOptions[0];
+      box.querySelectorAll('[data-party-info]').forEach(function (input) {
+        input.value = opt && opt.value ? (opt.dataset[input.dataset.partyInfo] || '') : '';
+      });
+    }
+
+    function totals() {
+      var neto = 0;
+      form.querySelectorAll('[data-lines]').forEach(function (section) {
+        if (section.hidden) return;
+        section.querySelectorAll('[data-line-body] [data-col="total"]').forEach(function (input) {
+          neto += num(input);
+        });
+      });
+      var igv = neto * num(form.querySelector('[name="igv_percent"]')) / 100;
+      form.querySelectorAll('[data-sum="neto"]').forEach(function (el) { el.textContent = money(neto); });
+      form.querySelectorAll('[data-sum="igv"]').forEach(function (el) { el.textContent = money(igv); });
+      form.querySelectorAll('[data-sum="total"]').forEach(function (el) { el.textContent = money(neto + igv); });
+    }
+
+    function renumber(section) {
+      var prefix = section.dataset.lines;
+      var rows = section.querySelectorAll('[data-line-body] tr');
+      rows.forEach(function (row, i) {
+        row.querySelectorAll('[data-col]').forEach(function (input) {
+          input.name = prefix + '[' + i + '][' + input.dataset.col + ']';
+        });
+        var n = row.querySelector('[data-line-number]');
+        if (n) n.textContent = String(i + 1);
+      });
+      var empty = section.querySelector('[data-line-empty]');
+      if (empty) empty.hidden = rows.length > 0;
+    }
+
+    function addRow(section) {
+      var tpl = section.querySelector('template[data-line-template]');
+      section.querySelector('[data-line-body]').appendChild(tpl.content.cloneNode(true));
+      renumber(section);
+      totals();
+    }
+
+    function renumberExtra() {
+      var blocks = form.querySelectorAll('[data-extra-block]');
+      blocks.forEach(function (block, b) {
+        var prefix = 'extra_block[' + b + ']';
+        block.querySelector('[data-extra-title]').name = prefix + '[title]';
+        block.querySelectorAll('[data-extra-line]').forEach(function (line, n) {
+          line.querySelectorAll('[data-extra-col]').forEach(function (input) {
+            input.name = prefix + '[line][' + n + '][' + input.dataset.extraCol + ']';
+          });
+        });
+      });
+      var empty = form.querySelector('[data-extra-empty]');
+      if (empty) empty.hidden = blocks.length > 0;
+    }
+
+    function addExtraLine(block) {
+      var tpl = form.querySelector('template[data-extra-line-template]');
+      var list = block.querySelector('[data-extra-line-list]');
+      list.appendChild(tpl.content.cloneNode(true));
+      renumberExtra();
+      return list.lastElementChild;
+    }
+
+    function addExtraBlock() {
+      var tpl = form.querySelector('template[data-extra-block-template]');
+      var list = form.querySelector('[data-extra-block-list]');
+      list.appendChild(tpl.content.cloneNode(true));
+      var block = list.lastElementChild;
+      addExtraLine(block);
+      block.querySelector('[data-extra-title]').focus();
+    }
+
+    function computeRow(row) {
+      var price = row.querySelector('[data-calc="price"]');
+      if (!price) return;
+      var total = num(row.querySelector('[data-calc="qty"]')) * num(row.querySelector('[data-calc="periods"]')) * num(price);
+      row.querySelector('[data-col="total"]').value = total.toFixed(2);
+    }
+
+    function applyKind() {
+      var checked = form.querySelector('input[name="order_contract_kind_id"]:checked');
+      var kind = checked ? checked.value : '';
+      form.querySelectorAll('[data-contract-kind]').forEach(function (el) {
+        var on = el.dataset.contractKind === kind;
+        el.hidden = !on;
+        el.querySelectorAll('input, select, textarea').forEach(function (input) { input.disabled = !on; });
+      });
+      var hint = form.querySelector('[data-kind-hint]');
+      if (hint) hint.hidden = kind !== '';
+      totals();
+    }
+
+    form.addEventListener('change', function (e) {
+      if (e.target.matches('[data-party-select]')) fillParty(e.target);
+      if (e.target.name === 'order_contract_kind_id') applyKind();
+    });
+
+    form.addEventListener('input', function (e) {
+      if (e.target.matches('[data-calc]')) computeRow(e.target.closest('tr'));
+      totals();
+    });
+
+    function isoDate(d) {
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function addDays(days) {
+      var d = new Date();
+      d.setDate(d.getDate() + days);
+      return isoDate(d);
+    }
+
+    function firstOption(select) {
+      return Array.prototype.find.call(select.options, function (opt) { return opt.value !== ''; });
+    }
+
+    function setValue(el, value) {
+      if (!el) return;
+      el.value = value;
+    }
+
+    function pickFirstContact(select) {
+      var target = select.getAttribute('hx-target');
+      if (!target) return;
+      select.addEventListener('htmx:after:swap', function () {
+        var contact = document.querySelector(target);
+        var opt = contact && firstOption(contact);
+        if (opt) contact.value = opt.value;
+      }, { once: true });
+    }
+
+    function sampleParty(name, nth) {
+      var select = form.querySelector('select[name="' + name + '"]');
+      if (!select || select.disabled) return;
+      var choices = Array.prototype.filter.call(select.options, function (o) { return o.value !== ''; });
+      var opt = choices[Math.min(nth || 0, choices.length - 1)];
+      if (!opt) return;
+      select.value = opt.value;
+      pickFirstContact(select);
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    var sampleLines = {
+      ad_space_line: [
+        { code: 'PB-01', element: 'Banner colgante', location: 'Atrio central, nivel 1', motive: 'Campaña de verano', start_date: 0, end_date: 30, element_qty: '2', periods: '1', period_unit: 'month', unit_price: '1500.00' },
+        { code: 'PB-07', element: 'Pantalla LED', location: 'Patio de comidas, nivel 3', motive: 'Lanzamiento de producto', start_date: 0, end_date: 60, element_qty: '1', periods: '2', period_unit: 'month', unit_price: '2800.00' }
+      ],
+      temp_space_line: [
+        { code: 'ET-03', location: 'Pasillo norte, nivel 2', area: '12 m²', motive: 'Degustación', description: 'Stand de activación con dos promotores', schedule: '10:00 – 22:00', start_date: 0, end_date: 6, days: '7', total: '4200.00' },
+        { code: 'ET-05', location: 'Plaza exterior', area: '30 m²', motive: 'Exhibición de vehículos', description: 'Zona de exhibición con toldo', schedule: '11:00 – 21:00', start_date: 7, end_date: 13, days: '7', total: '6300.00' }
+      ],
+      production_line: [
+        { code: 'PR-01', location: 'Atrio central', element: 'Banner', material: 'Lona mate', motive: 'Campaña de verano', quantity: '2', width: '3.00', height: '6.00', total: '1800.00' },
+        { code: 'PR-02', location: 'Ingreso principal', element: 'Tótem', material: 'Trovicel 5 mm', motive: 'Lanzamiento de producto', quantity: '4', width: '0.80', height: '1.80', total: '960.00' }
+      ]
+    };
+
+    function sampleLinesFor(section) {
+      var samples = sampleLines[section.dataset.lines];
+      if (!samples || section.hidden) return;
+      var body = section.querySelector('[data-line-body]');
+      body.replaceChildren();
+      samples.forEach(function (sample) {
+        addRow(section);
+        var row = body.lastElementChild;
+        Object.keys(sample).forEach(function (col) {
+          var value = sample[col];
+          if (col === 'start_date' || col === 'end_date') value = addDays(value);
+          setValue(row.querySelector('[data-col="' + col + '"]'), value);
+        });
+        computeRow(row);
+      });
+    }
+
+    function sampleDynamicFields() {
+      var seen = {};
+      form.querySelectorAll('[name^="field_"]').forEach(function (input) {
+        if (input.disabled) return;
+        if (input.type === 'checkbox') {
+          if (input.classList.contains('toggle')) {
+            input.checked = true;
+          } else if (!seen[input.name]) {
+            seen[input.name] = true;
+            input.checked = true;
+          }
+        } else if (input.tagName === 'SELECT') {
+          var opt = firstOption(input);
+          if (opt) input.value = opt.value;
+        } else if (input.type === 'number') {
+          input.value = '100';
+        } else if (input.type === 'date') {
+          input.value = addDays(0);
+        } else {
+          input.value = 'Ejemplo';
+        }
+      });
+    }
+
+    function fillSample() {
+      var kinds = form.querySelectorAll('input[name="order_contract_kind_id"]');
+      if (kinds.length && !form.querySelector('input[name="order_contract_kind_id"]:checked')) kinds[0].checked = true;
+      applyKind();
+      setValue(form.querySelector('[name="issued_on"]'), addDays(0));
+      setValue(form.querySelector('[name="igv_percent"]'), '18');
+      sampleParty('client_id', 0);
+      sampleParty('issuer_id', 0);
+      sampleParty('billing_client_id', 0);
+      sampleParty('agency_client_id', 1);
+      setValue(form.querySelector('[name="brand"]'), 'Marca de ejemplo');
+      setValue(form.querySelector('[name="payment_terms"]'), '30 días fecha de factura');
+      var guarantee = form.querySelector('input[name="guarantee"][value="1"]');
+      if (guarantee) guarantee.checked = true;
+      setValue(form.querySelector('[name="guarantee_amount"]'), '1500.00');
+      form.querySelectorAll('[data-lines]').forEach(sampleLinesFor);
+      sampleDynamicFields();
+      totals();
+    }
+
+    var PDFMAKE_BASE = 'https://cdn.jsdelivr.net/npm/pdfmake@0.3.12/build/';
+
+    function loadScript(src) {
+      return new Promise(function (resolve, reject) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = function () {
+          s.remove();
+          reject(new Error('No se pudo cargar ' + src));
+        };
+        document.head.appendChild(s);
+      });
+    }
+
+    function loadPdfMake() {
+      if (!window.elmoPdfMake) {
+        window.elmoPdfMake = loadScript(PDFMAKE_BASE + 'pdfmake.min.js')
+          .then(function () { return loadScript(PDFMAKE_BASE + 'vfs_fonts.js'); })
+          .then(function () { return window.pdfMake; })
+          .catch(function (err) {
+            window.elmoPdfMake = null;
+            throw err;
+          });
+      }
+      return window.elmoPdfMake;
+    }
+
+    function clean(text) {
+      return (text || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function shownDate(value) {
+      var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+      return m ? m.slice(1).reverse().join('/') : (value || '');
+    }
+
+    function labelFor(input) {
+      if (input.id) {
+        var byFor = form.querySelector('label[for="' + input.id + '"]');
+        if (byFor) return clean(byFor.textContent);
+      }
+      var wrap = input.closest('label');
+      if (wrap) return clean(wrap.textContent);
+      if (input.getAttribute('aria-label')) return clean(input.getAttribute('aria-label'));
+      var prev = input.previousElementSibling;
+      if (prev && prev.classList.contains('label')) return clean(prev.textContent);
+      return '';
+    }
+
+    function groupLabel(input) {
+      var box = input.closest('div');
+      var prev = box && box.previousElementSibling;
+      return prev && prev.classList.contains('label') ? clean(prev.textContent) : '';
+    }
+
+    function controlValue(input) {
+      if (input.tagName === 'SELECT') {
+        var opt = input.selectedOptions[0];
+        return opt && opt.value !== '' ? clean(opt.textContent) : '';
+      }
+      if (input.type === 'date') return shownDate(input.value);
+      return input.value;
+    }
+
+    function pdfSkipped(el, kind) {
+      if (el.closest('[hidden], [data-pdf-skip]')) return true;
+      if (el.disabled) return true;
+      var only = el.dataset.pdfContractKind;
+      return only !== undefined && only !== kind;
+    }
+
+    function fieldsetContent(fieldset, kind) {
+      var pairs = [];
+      var texts = [];
+      var groups = {};
+      var legend = fieldset.querySelector('legend');
+      var heading = legend ? clean(legend.textContent).replace(/\s*\*$/, '') : '';
+      fieldset.querySelectorAll('input, select, textarea').forEach(function (input) {
+        if (input.type === 'hidden' || pdfSkipped(input, kind)) return;
+        if (input.type === 'radio' || (input.type === 'checkbox' && !input.classList.contains('toggle'))) {
+          if (!groups[input.name]) {
+            groups[input.name] = { label: groupLabel(input), values: [] };
+            pairs.push(groups[input.name]);
+          }
+          if (input.checked) groups[input.name].values.push(labelFor(input));
+          return;
+        }
+        if (input.type === 'checkbox') {
+          pairs.push({ label: labelFor(input), values: [input.checked ? 'Sí' : 'No'] });
+          return;
+        }
+        if (input.tagName === 'TEXTAREA') {
+          var label = labelFor(input);
+          texts.push({ label: label === heading ? '' : label, text: input.value });
+          return;
+        }
+        pairs.push({ label: labelFor(input), values: [controlValue(input)] });
+      });
+      var out = [{ text: heading, style: 'section' }];
+      var body = [];
+      pairs.forEach(function (p) {
+        var value = p.values.filter(function (v) { return v !== ''; }).join(', ');
+        body.push([ { text: p.label.replace(/\s*\*$/, ''), style: 'label' }, value || '—' ]);
+      });
+      if (body.length) {
+        out.push({ table: { widths: [130, '*'], body: body }, layout: 'lightHorizontalLines' });
+      }
+      texts.forEach(function (t) {
+        if (t.label) out.push({ text: t.label, style: 'label', margin: [0, 6, 0, 2] });
+        out.push({ text: t.text.trim() || '—', style: 'legal' });
+      });
+      return out;
+    }
+
+    var compactLines = {
+      hLineWidth: function (i, node) {
+        if (i === 0 || i === node.table.body.length) return 0;
+        return i === node.table.headerRows ? 1 : 0.5;
+      },
+      vLineWidth: function () { return 0; },
+      hLineColor: function (i, node) { return i === node.table.headerRows ? '#000000' : '#aaaaaa'; },
+      paddingLeft: function () { return 2; },
+      paddingRight: function () { return 2; }
+    };
+
+    function linesContent(section) {
+      var title = section.querySelector('h2');
+      var heads = [];
+      var keep = [];
+      section.querySelectorAll('thead th').forEach(function (th, i) {
+        if (th.querySelector('.sr-only')) return;
+        keep.push(i);
+        heads.push({ text: clean(th.textContent), style: 'tableHeader' });
+      });
+      var body = [heads];
+      section.querySelectorAll('[data-line-body] tr').forEach(function (tr) {
+        var cells = tr.children;
+        body.push(keep.map(function (i) {
+          var td = cells[i];
+          var input = td && td.querySelector('input, select');
+          return input ? controlValue(input) : clean(td ? td.textContent : '');
+        }));
+      });
+      var out = [{ text: title ? clean(title.textContent) : '', style: 'section' }];
+      if (body.length === 1) {
+        out.push({ text: 'Sin filas.', style: 'legal' });
+      } else {
+        out.push({
+          table: { headerRows: 1, widths: keep.map(function (_, i) { return i === 0 ? 'auto' : '*'; }), body: body },
+          layout: compactLines,
+          fontSize: 6.5
+        });
+      }
+      return out;
+    }
+
+    function totalsContent(dl) {
+      var body = [];
+      dl.querySelectorAll('dt').forEach(function (dt) {
+        var dd = dt.nextElementSibling;
+        body.push([ '', { text: clean(dt.textContent), bold: true }, { text: dd ? clean(dd.textContent) : '', alignment: 'right' } ]);
+      });
+      return [{ table: { widths: ['*', 110, 90], body: body }, layout: 'noBorders', margin: [0, 8, 0, 0] }];
+    }
+
+    function extraBlockContent(block) {
+      var title = clean(block.querySelector('[data-extra-title]').value);
+      var body = [];
+      block.querySelectorAll('[data-extra-line]').forEach(function (line) {
+        var question = clean(line.querySelector('[data-extra-col="question"]').value);
+        var answer = clean(line.querySelector('[data-extra-col="answer"]').value);
+        if (!question && !answer) return;
+        body.push([ { text: question || '—', style: 'label' }, answer || '—' ]);
+      });
+      if (!title && !body.length) return [];
+      var out = [{ text: title || 'Bloque personalizado', style: 'section' }];
+      if (body.length) {
+        out.push({ table: { widths: ['40%', '*'], body: body }, layout: 'lightHorizontalLines' });
+      }
+      return out;
+    }
+
+    function buildDoc() {
+      var checked = form.querySelector('input[name="order_contract_kind_id"]:checked');
+      var kind = checked ? checked.value : '';
+      var h1 = form.querySelector('h1');
+      var sub = h1 && h1.nextElementSibling;
+      var content = [
+        { text: 'ORDEN DE PEDIDO', style: 'title' },
+        { text: h1 ? clean(h1.textContent) : '', style: 'subtitle' }
+      ];
+      if (sub) content.push({ text: clean(sub.textContent), style: 'legal', margin: [0, 0, 0, 8] });
+      var seen = [];
+      form.querySelectorAll('fieldset, section[data-lines], dl, [data-extra-block]').forEach(function (el) {
+        if (el.closest('[hidden], [data-pdf-skip]')) return;
+        if (seen.some(function (s) { return s.contains(el); })) return;
+        seen.push(el);
+        if (el.hasAttribute('data-extra-block')) content = content.concat(extraBlockContent(el));
+        else if (el.tagName === 'FIELDSET') content = content.concat(fieldsetContent(el, kind));
+        else if (el.tagName === 'SECTION') content = content.concat(linesContent(el));
+        else content = content.concat(totalsContent(el));
+      });
+      return {
+        pageSize: 'A4',
+        pageMargins: [30, 36, 30, 46],
+        info: { title: pdfName() },
+        content: content,
+        defaultStyle: { fontSize: 9 },
+        styles: {
+          title: { fontSize: 16, bold: true, alignment: 'center' },
+          subtitle: { fontSize: 11, alignment: 'center', margin: [0, 2, 0, 2] },
+          section: { fontSize: 11, bold: true, margin: [0, 12, 0, 4] },
+          label: { bold: true, color: '#444444' },
+          legal: { fontSize: 8, color: '#333333' },
+          tableHeader: { bold: true, fontSize: 6.5 }
+        },
+        footer: function (page, pages) {
+          return { text: 'Página ' + page + ' / ' + pages, alignment: 'right', fontSize: 8, margin: [30, 14, 30, 0] };
+        }
+      };
+    }
+
+    function pdfName() {
+      var family = form.id === 'productionorder-form' ? 'produccion' : 'alquiler';
+      var issued = form.querySelector('[name="issued_on"]');
+      return 'orden-pedido-' + family + '-' + ((issued && issued.value) || addDays(0)) + '.pdf';
+    }
+
+    function exportPdf(button) {
+      var error = form.querySelector('[data-pdf-error]');
+      if (error) error.hidden = true;
+      var preview = window.open('', '_blank');
+      var spinner = document.createElement('span');
+      spinner.className = 'loading loading-spinner loading-xs';
+      button.disabled = true;
+      button.prepend(spinner);
+      return loadPdfMake()
+        .then(function (pdfMake) {
+          var pdf = pdfMake.createPdf(buildDoc());
+          if (preview) return pdf.open(preview);
+          return pdf.download(pdfName());
+        })
+        .catch(function (err) {
+          console.error(err);
+          if (preview && !preview.closed) preview.close();
+          if (error) error.hidden = false;
+        })
+        .finally(function () {
+          spinner.remove();
+          button.disabled = false;
+        });
+    }
+
+    form.addEventListener('click', function (e) {
+      if (e.target.closest('[data-sample-fill]')) {
+        fillSample();
+        return;
+      }
+      var pdf = e.target.closest('[data-pdf-export]');
+      if (pdf) {
+        exportPdf(pdf);
+        return;
+      }
+      if (e.target.closest('[data-extra-block-add]')) {
+        addExtraBlock();
+        return;
+      }
+      var extraAdd = e.target.closest('[data-extra-line-add]');
+      if (extraAdd) {
+        addExtraLine(extraAdd.closest('[data-extra-block]')).querySelector('[data-extra-col]').focus();
+        return;
+      }
+      var extraLineRemove = e.target.closest('[data-extra-line-remove]');
+      if (extraLineRemove) {
+        extraLineRemove.closest('[data-extra-line]').remove();
+        renumberExtra();
+        return;
+      }
+      var extraBlockRemove = e.target.closest('[data-extra-block-remove]');
+      if (extraBlockRemove) {
+        extraBlockRemove.closest('[data-extra-block]').remove();
+        renumberExtra();
+        return;
+      }
+      var add = e.target.closest('[data-line-add]');
+      if (add) {
+        addRow(add.closest('[data-lines]'));
+        return;
+      }
+      var remove = e.target.closest('[data-line-remove]');
+      if (remove) {
+        var section = remove.closest('[data-lines]');
+        remove.closest('tr').remove();
+        renumber(section);
+        totals();
+      }
+    });
+
+    form.querySelectorAll('[data-lines]').forEach(addRow);
+    var comboSeq = 0;
+
+    function comboNorm(s) {
+      return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    }
+
+    function initCombo(select) {
+      if (select.dataset.comboReady) return;
+      select.dataset.comboReady = '1';
+      comboSeq += 1;
+      var listId = 'combo-list-' + comboSeq;
+      var emptyRow = select.hasAttribute('data-combo-empty-row');
+      var wrap = document.createElement('div');
+      wrap.className = 'dropdown w-full';
+      var field = document.createElement('label');
+      field.className = 'input w-full';
+      field.setAttribute('data-pdf-skip', '');
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'grow';
+      input.autocomplete = 'off';
+      input.setAttribute('role', 'combobox');
+      input.setAttribute('aria-autocomplete', 'list');
+      input.setAttribute('aria-expanded', 'false');
+      input.setAttribute('aria-controls', listId);
+      if (select.id) input.id = select.id + '-combo';
+      if (select.required) input.setAttribute('aria-required', 'true');
+      var caption = select.id && form.querySelector('label[for="' + select.id + '"]');
+      if (caption) input.setAttribute('aria-label', caption.textContent.replace(/[\s*]+$/, '').trim());
+      var clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'btn btn-ghost btn-xs btn-circle';
+      clear.setAttribute('aria-label', 'Limpiar');
+      clear.tabIndex = -1;
+      clear.textContent = '×';
+      field.appendChild(input);
+      field.appendChild(clear);
+      var list = document.createElement('ul');
+      list.id = listId;
+      list.setAttribute('role', 'listbox');
+      list.className = 'dropdown-content menu bg-base-100 rounded-box border border-base-300 shadow-lg z-50 mt-1 w-full max-h-64 overflow-y-auto flex-nowrap';
+      list.hidden = true;
+      wrap.appendChild(field);
+      wrap.appendChild(list);
+      select.parentNode.insertBefore(wrap, select);
+      var mustPick = select.required;
+      select.required = false;
+      select.style.display = 'none';
+      if (caption) caption.addEventListener('click', function () { input.focus(); });
+
+      var rows = [];
+      var active = -1;
+      var typing = false;
+
+      function labelOf() {
+        var opt = select.selectedOptions[0];
+        if (!opt) return '';
+        if (opt.value !== '' || emptyRow) return opt.textContent.trim();
+        return '';
+      }
+
+      function refresh() {
+        var first = select.options[0];
+        input.value = labelOf();
+        input.placeholder = first && first.value === '' && !emptyRow ? first.textContent.trim() : '';
+        clear.hidden = select.value === '' || select.disabled;
+        input.disabled = select.disabled;
+        input.setCustomValidity(mustPick && select.value === '' ? 'Selecciona una opción' : '');
+        typing = false;
+      }
+
+      function setActive(index) {
+        active = index;
+        rows.forEach(function (row, i) {
+          var on = i === index;
+          row.el.classList.toggle('menu-active', on);
+          row.el.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+        if (index >= 0 && rows[index]) {
+          input.setAttribute('aria-activedescendant', rows[index].el.id);
+          rows[index].el.scrollIntoView({ block: 'nearest' });
+        } else {
+          input.removeAttribute('aria-activedescendant');
+        }
+      }
+
+      function render() {
+        var q = typing ? comboNorm(input.value.trim()) : '';
+        list.textContent = '';
+        rows = [];
+        Array.prototype.forEach.call(select.options, function (opt) {
+          if (opt.value === '' && !emptyRow) return;
+          var hay = comboNorm([opt.textContent, opt.dataset.ruc, opt.dataset.email, opt.dataset.phone].join(' '));
+          if (q && hay.indexOf(q) === -1) return;
+          var li = document.createElement('li');
+          li.setAttribute('role', 'presentation');
+          var a = document.createElement('a');
+          a.id = listId + '-' + rows.length;
+          a.setAttribute('role', 'option');
+          a.dataset.value = opt.value;
+          a.appendChild(document.createTextNode(opt.textContent.trim()));
+          var extra = opt.dataset.ruc ? 'RUC ' + opt.dataset.ruc : (opt.dataset.email || '');
+          if (extra) {
+            var small = document.createElement('span');
+            small.className = 'text-xs text-base-content/60';
+            small.textContent = extra;
+            a.appendChild(small);
+          }
+          a.className = 'flex flex-wrap items-baseline justify-between gap-x-3 py-2.5';
+          li.appendChild(a);
+          list.appendChild(li);
+          rows.push({ el: a, value: opt.value });
+        });
+        if (!rows.length) {
+          var none = document.createElement('li');
+          none.className = 'menu-disabled';
+          var text = document.createElement('span');
+          text.textContent = 'Sin resultados';
+          none.appendChild(text);
+          list.appendChild(none);
+        }
+        var current = rows.findIndex(function (row) { return row.value === select.value; });
+        setActive(typing ? (rows.length ? 0 : -1) : current);
+      }
+
+      function openList() {
+        if (select.disabled) return;
+        render();
+        list.hidden = false;
+        wrap.classList.add('dropdown-open');
+        input.setAttribute('aria-expanded', 'true');
+      }
+
+      function closeList() {
+        list.hidden = true;
+        wrap.classList.remove('dropdown-open');
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+      }
+
+      function choose(index) {
+        var row = rows[index];
+        if (!row) return;
+        var changed = select.value !== row.value;
+        select.value = row.value;
+        closeList();
+        refresh();
+        if (changed) select.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      input.addEventListener('focus', function () {
+        input.select();
+        openList();
+      });
+      input.addEventListener('click', function () {
+        if (list.hidden) openList();
+      });
+      input.addEventListener('input', function () {
+        typing = true;
+        openList();
+      });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (list.hidden) { openList(); return; }
+          if (!rows.length) return;
+          var step = e.key === 'ArrowDown' ? 1 : -1;
+          setActive((active + step + rows.length) % rows.length);
+        } else if (e.key === 'Enter') {
+          if (!list.hidden) {
+            e.preventDefault();
+            if (active >= 0) choose(active);
+          }
+        } else if (e.key === 'Escape') {
+          if (!list.hidden) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeList();
+            refresh();
+          }
+        } else if (e.key === 'Tab') {
+          closeList();
+          refresh();
+        }
+      });
+      input.addEventListener('blur', function () {
+        closeList();
+        refresh();
+      });
+      input.addEventListener('change', function (e) { e.stopPropagation(); });
+      list.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      list.addEventListener('click', function (e) {
+        var a = e.target.closest('a[role="option"]');
+        if (!a) return;
+        choose(rows.findIndex(function (row) { return row.el === a; }));
+      });
+      clear.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      clear.addEventListener('click', function () {
+        var changed = select.value !== '';
+        select.value = '';
+        refresh();
+        if (changed) select.dispatchEvent(new Event('change', { bubbles: true }));
+        input.focus();
+      });
+      select.addEventListener('change', refresh);
+      new MutationObserver(refresh).observe(select, { childList: true });
+      new MutationObserver(refresh).observe(select, { attributes: true, attributeFilter: ['disabled'] });
+      select.refreshCombo = refresh;
+      refresh();
+    }
+
+    form.addEventListener('htmx:after:swap', function () {
+      form.querySelectorAll('select[data-combo]').forEach(function (select) {
+        if (select.refreshCombo) select.refreshCombo();
+      });
+    });
+
+    form.querySelectorAll('[data-party-select]').forEach(fillParty);
+    form.querySelectorAll('select[data-combo]').forEach(initCombo);
+    renumberExtra();
+    applyKind();
+  })();
+</script>

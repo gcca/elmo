@@ -1,0 +1,516 @@
+<%c++
+  auto& o = home_tmp_stream;
+  auto& appname = std::any_cast<std::string&>(@@["appname"]);
+  const auto appname_lead = appname.empty() ? 0u : static_cast<unsigned char>(appname[0]);
+  const std::size_t appinitial_len = appname_lead >= 0xF0 ? 4 : appname_lead >= 0xE0 ? 3 : appname_lead >= 0xC0 ? 2 : 1;
+  const auto appname_html = drogon::HttpViewData::htmlTranslate(appname);
+  const auto appinitial_html = drogon::HttpViewData::htmlTranslate(appname.substr(0, appinitial_len));
+  auto& name = std::any_cast<std::string&>(@@["name"]);
+  auto& username = std::any_cast<std::string&>(@@["username"]);
+  const auto name_html = drogon::HttpViewData::htmlTranslate(name);
+  const auto username_html = drogon::HttpViewData::htmlTranslate(username);
+  const auto help_map_html = drogon::HttpViewData::htmlTranslate(@@.get<std::string>("help_map"));
+%>
+<!doctype html>
+<html lang="es" data-theme="dim">
+  <head>
+    <script>(function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="htmx-config" content='{"history":"reload"}' />
+    <title><%c++ o << appname_html; %> | Inicio</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5.7.50" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5.7.50/themes.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.1/dist/htmx.min.js"></script>
+    <style>
+      #sidebar { width: 16rem; transition: width 0.2s ease-out; }
+      .sidebar-collapsed-only { display: none; }
+      select[data-combo] { display: none !important; }
+      #sidebar-drawer:checked ~ .drawer-side .sidebar-expand-icon,
+      #sidebar-drawer:not(:checked) ~ .drawer-side .sidebar-collapse-icon { display: none; }
+      @media (prefers-reduced-motion: reduce) {
+        #sidebar { transition: none; }
+      }
+      @media (min-width: 64rem) {
+        #sidebar-drawer:not(:checked) ~ .drawer-side { overflow: visible; }
+        #sidebar-drawer:not(:checked) ~ .drawer-side #sidebar { width: 4rem; }
+        #sidebar-drawer:not(:checked) ~ .drawer-side .sidebar-expanded-only { display: none; }
+        #sidebar-drawer:not(:checked) ~ .drawer-side .sidebar-collapsed-only { display: block; }
+        #sidebar-drawer:not(:checked) ~ .drawer-side #sidebar-header { justify-content: center; padding-inline: 0.5rem; }
+        #sidebar-drawer:not(:checked) ~ .drawer-side #sidebar-nav { overflow: visible; padding: 0.5rem; }
+        #sidebar-drawer:not(:checked) ~ .drawer-side #sidebar-nav > .menu > li > a { justify-content: center; }
+        #sidebar-drawer:not(:checked) ~ .drawer-side #sidebar-footer { padding: 0.5rem; }
+        #sidebar-drawer:not(:checked) ~ .drawer-side #sidebar-user-trigger { justify-content: center; }
+      }
+    </style>
+    <script>
+      function markTheme(name) {
+        document.querySelectorAll('[data-theme-btn]').forEach(function (btn) {
+          btn.querySelector('svg').classList.toggle('invisible', btn.dataset.themeBtn !== name);
+        });
+      }
+      function setTheme(name) {
+        document.documentElement.setAttribute('data-theme', name);
+        try { localStorage.setItem('theme', name); } catch (e) {}
+        markTheme(name);
+      }
+      var sidebarQuery = window.matchMedia('(min-width: 64rem)');
+      function closeMobileSidebar() {
+        if (sidebarQuery.matches) return;
+        var drawer = document.getElementById('sidebar-drawer');
+        if (!drawer || !drawer.checked) return;
+        drawer.checked = false;
+        drawer.dispatchEvent(new Event('change'));
+      }
+      function initSidebar() {
+        var drawer = document.getElementById('sidebar-drawer');
+        var sidebar = document.getElementById('sidebar');
+        var toggles = document.querySelectorAll('[data-sidebar-toggle]');
+        function focusMobileToggle() {
+          var mobileToggle = document.querySelector('[data-sidebar-toggle-mobile]');
+          if (mobileToggle) mobileToggle.focus();
+        }
+        function syncState() {
+          var desktop = sidebarQuery.matches;
+          drawer.parentElement.classList.toggle('drawer-open', desktop);
+          var expanded = drawer.checked;
+          var rail = desktop && !expanded;
+          var action = desktop
+            ? (expanded ? 'Contraer barra lateral' : 'Expandir barra lateral')
+            : (expanded ? 'Cerrar barra lateral' : 'Abrir barra lateral');
+          toggles.forEach(function (button) {
+            button.setAttribute('aria-expanded', String(expanded));
+            button.setAttribute('aria-label', action);
+            button.setAttribute('title', action);
+          });
+          document.querySelectorAll('[data-sidebar-tip]').forEach(function (item) {
+            item.classList.toggle('tooltip', rail);
+            item.classList.toggle('tooltip-right', rail);
+          });
+        }
+        function setExpanded(expanded) {
+          drawer.checked = expanded;
+          syncState();
+        }
+        toggles.forEach(function (button) {
+          button.addEventListener('click', function () {
+            setExpanded(!drawer.checked);
+          });
+        });
+        drawer.addEventListener('change', syncState);
+        sidebarQuery.addEventListener('change', function (event) {
+          var focusWasInSidebar = sidebar.contains(document.activeElement);
+          setExpanded(event.matches);
+          if (!event.matches && focusWasInSidebar) focusMobileToggle();
+        });
+        document.addEventListener('keydown', function (event) {
+          if (event.key !== 'Escape' || sidebarQuery.matches || !drawer.checked) return;
+          setExpanded(false);
+          focusMobileToggle();
+        });
+        setExpanded(sidebarQuery.matches);
+      }
+      var elmoHelp = {};
+      var helpEditable = /^(order|party|rentorder|ad_space_line|temp_space_line|production_line)\.[a-z_]+$/;
+      var helpIconPath = 'm11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z';
+      function helpCaption(host) {
+        var clone = host.cloneNode(true);
+        clone.querySelectorAll('[data-help-icon], input, select, textarea').forEach(function (el) { el.remove(); });
+        return clone.textContent.replace(/[\s*]+$/, '').replace(/\s+/g, ' ').trim();
+      }
+      function helpTip() {
+        var tip = document.getElementById('help-tip');
+        if (!tip) {
+          tip = document.createElement('div');
+          tip.id = 'help-tip';
+          tip.setAttribute('role', 'tooltip');
+          tip.className = 'rounded-box bg-neutral px-3 py-2 text-xs leading-snug text-neutral-content shadow-lg';
+          tip.style.cssText = 'position: fixed; z-index: 60; pointer-events: none; max-width: min(20rem, calc(100vw - 16px)); left: 0; top: 0;';
+          tip.hidden = true;
+          document.body.appendChild(tip);
+        }
+        return tip;
+      }
+      function showHelpTip(button) {
+        var text = elmoHelp[button.dataset.helpKey] || '';
+        var tip = helpTip();
+        if (!text) { tip.hidden = true; return; }
+        tip.textContent = text;
+        tip.style.left = '0px';
+        tip.style.top = '0px';
+        tip.hidden = false;
+        var r = button.getBoundingClientRect();
+        var w = tip.offsetWidth;
+        var h = tip.offsetHeight;
+        var left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), window.innerWidth - w - 8);
+        var top = r.top - h - 6;
+        if (top < 8) top = r.bottom + 6;
+        tip.style.left = left + 'px';
+        tip.style.top = top + 'px';
+      }
+      function hideHelpTip() {
+        var tip = document.getElementById('help-tip');
+        if (tip) tip.hidden = true;
+      }
+      function decorateHelp(host) {
+        var key = host.dataset.help;
+        var text = elmoHelp[key] || '';
+        var editable = helpEditable.test(key);
+        var button = host.querySelector(':scope > [data-help-icon]');
+        if (!text && !editable) {
+          if (button) button.remove();
+          return;
+        }
+        if (!button) {
+          button = document.createElement('button');
+          button.type = 'button';
+          button.setAttribute('data-help-icon', '');
+          button.dataset.helpKey = key;
+          button.className = 'ml-1 inline-flex h-4 w-4 shrink-0 cursor-help items-center justify-center align-middle rounded-full text-base-content/60 hover:text-primary focus-visible:outline-2 focus-visible:outline-primary';
+          var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          svg.setAttribute('viewBox', '0 0 24 24');
+          svg.setAttribute('fill', 'none');
+          svg.setAttribute('stroke', 'currentColor');
+          svg.setAttribute('stroke-width', '1.5');
+          svg.setAttribute('aria-hidden', 'true');
+          svg.setAttribute('class', 'h-4 w-4');
+          var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('stroke-linecap', 'round');
+          path.setAttribute('stroke-linejoin', 'round');
+          path.setAttribute('d', helpIconPath);
+          svg.appendChild(path);
+          button.appendChild(svg);
+          button.addEventListener('mouseenter', function () { showHelpTip(button); });
+          button.addEventListener('mouseleave', hideHelpTip);
+          button.addEventListener('focus', function () { showHelpTip(button); });
+          button.addEventListener('blur', hideHelpTip);
+          button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (helpEditable.test(button.dataset.helpKey)) {
+              hideHelpTip();
+              openHelpEditor(button);
+            } else {
+              showHelpTip(button);
+            }
+          });
+          host.appendChild(button);
+        }
+        button.classList.toggle('opacity-40', !text);
+        button.setAttribute('aria-label', text ? 'Ayuda: ' + text : 'Agregar ayuda para ' + helpCaption(host));
+      }
+      function applyHelp(root) {
+        (root || document).querySelectorAll('[data-help]').forEach(decorateHelp);
+      }
+      function openHelpEditor(button) {
+        var dialog = document.getElementById('help-dialog');
+        var host = button.parentElement;
+        var key = button.dataset.helpKey;
+        var input = dialog.querySelector('textarea');
+        dialog.dataset.helpKey = key;
+        dialog.querySelector('[data-help-caption]').textContent = helpCaption(host);
+        dialog.querySelector('[data-help-error]').hidden = true;
+        input.value = elmoHelp[key] || '';
+        dialog.returnFocus = button;
+        updateHelpCount();
+        dialog.showModal();
+        input.focus();
+      }
+      function updateHelpCount() {
+        var dialog = document.getElementById('help-dialog');
+        dialog.querySelector('[data-help-count]').textContent = Array.from(dialog.querySelector('textarea').value).length + ' / 500';
+      }
+      function saveHelp(event) {
+        event.preventDefault();
+        var dialog = document.getElementById('help-dialog');
+        var key = dialog.dataset.helpKey;
+        var text = dialog.querySelector('textarea').value.trim();
+        var error = dialog.querySelector('[data-help-error]');
+        var submit = dialog.querySelector('[data-help-save]');
+        submit.disabled = true;
+        error.hidden = true;
+        fetch('/elmo/help/' + encodeURIComponent(key), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ help_text: text })
+        }).then(function (resp) {
+          if (resp.ok) return null;
+          return resp.text().then(function (body) { throw new Error(body || 'No se pudo guardar.'); });
+        }).then(function () {
+          if (text) elmoHelp[key] = text; else delete elmoHelp[key];
+          document.querySelectorAll('[data-help="' + key + '"]').forEach(decorateHelp);
+          dialog.close();
+          if (dialog.returnFocus && dialog.returnFocus.isConnected) dialog.returnFocus.focus();
+        }).catch(function (err) {
+          error.textContent = err.message === 'Failed to fetch' ? 'No se pudo conectar con el servidor.' : err.message;
+          error.hidden = false;
+        }).finally(function () {
+          submit.disabled = false;
+        });
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        try { elmoHelp = JSON.parse(document.body.dataset.helpMap || '{}'); } catch (e) { elmoHelp = {}; }
+        applyHelp(document);
+        document.getElementById('help-form').addEventListener('submit', saveHelp);
+        document.querySelector('#help-dialog textarea').addEventListener('input', updateHelpCount);
+        window.addEventListener('scroll', hideHelpTip, true);
+        markTheme(document.documentElement.getAttribute('data-theme'));
+        initSidebar();
+        var modules = {
+          rentorder: '/elmo/rentorder/create',
+          productionorder: '/elmo/productionorder/create',
+          formblock: '/elmo/form/block/list',
+          partyclient: '/elmo/party/client/list',
+          partyissuer: '/elmo/party/issuer/list',
+          partycontact: '/elmo/party/contact/list',
+          fieldhelp: '/elmo/help/manage/list'
+        };
+        function markActive(module) {
+          document.querySelectorAll('[data-module-link]').forEach(function (link) {
+            link.classList.toggle('menu-active', link.dataset.moduleLink === module);
+          });
+        }
+        document.addEventListener('htmx:after:swap', function () {
+          hideHelpTip();
+          document.querySelectorAll('#main-content [data-help-updated]').forEach(function (el) {
+            if (el.dataset.text) elmoHelp[el.dataset.key] = el.dataset.text; else delete elmoHelp[el.dataset.key];
+            el.remove();
+          });
+          applyHelp(document.getElementById('main-content'));
+          var module = new URLSearchParams(window.location.search).get('t');
+          if (modules[module]) markActive(module);
+        });
+        document.querySelectorAll('[data-module-link]').forEach(function (link) {
+          link.addEventListener('click', function () {
+            markActive(link.dataset.moduleLink);
+            closeMobileSidebar();
+          });
+        });
+        var requested = new URLSearchParams(window.location.search).get('t');
+        if (requested && modules[requested]) {
+          markActive(requested);
+          htmx.ajax('GET', modules[requested], { target: '#main-content', swap: 'innerHTML' });
+        } else {
+          markActive('home');
+        }
+      });
+    </script>
+  </head>
+  <body class="min-h-screen bg-base-200" data-help-map="<%c++ o << help_map_html; %>">
+    <div class="drawer">
+      <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
+      <script>(function(){var d=document.getElementById('sidebar-drawer');var m=sidebarQuery.matches;d.parentElement.classList.toggle('drawer-open',m);d.checked=m;})();</script>
+      <div class="drawer-content flex min-w-0 flex-col">
+        <div class="navbar bg-base-100 shadow-sm lg:hidden">
+          <div class="flex-none">
+            <button type="button" class="btn btn-square btn-ghost drawer-button" aria-label="Abrir barra lateral" aria-controls="sidebar" aria-expanded="false" data-sidebar-toggle data-sidebar-toggle-mobile>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block h-6 w-6 stroke-current">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="flex-1">
+            <span class="text-lg font-bold tracking-tight"><%c++ o << appname_html; %></span>
+          </div>
+        </div>
+        <main class="flex-1 p-4 md:p-6">
+          <div id="main-content" class="mx-auto max-w-7xl">
+            <div class="hero min-h-[60vh]">
+              <div class="hero-content text-center">
+                <div class="max-w-md space-y-3">
+                  <h1 class="text-4xl font-bold">Hola, <%c++ o << name_html; %></h1>
+                  <p class="text-base-content/60">Sesión iniciada como <span class="font-mono"><%c++ o << username_html; %></span></p>
+                  <p class="text-base-content/60">Elige un módulo en el menú lateral para registrar una orden de pedido.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+      <div class="drawer-side z-20">
+        <label for="sidebar-drawer" aria-label="Cerrar barra lateral" class="drawer-overlay"></label>
+        <aside id="sidebar" class="flex min-h-full flex-col bg-base-100">
+          <div id="sidebar-header" class="flex h-16 items-center justify-between gap-2 border-b border-base-300 px-4">
+            <div class="sidebar-expanded-only flex min-w-0 items-center gap-3">
+              <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-box bg-primary font-bold text-primary-content"><%c++ o << appinitial_html; %></div>
+              <span class="truncate text-lg font-bold tracking-tight"><%c++ o << appname_html; %></span>
+            </div>
+            <button type="button" class="btn btn-square btn-ghost btn-sm shrink-0" aria-label="Contraer barra lateral" aria-controls="sidebar" aria-expanded="true" data-sidebar-toggle>
+              <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" fill="none" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="sidebar-collapse-icon h-5 w-5 stroke-current">
+                <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+                <path d="M9 3v18"></path>
+                <path d="m16 15-3-3 3-3"></path>
+              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" fill="none" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="sidebar-expand-icon h-5 w-5 stroke-current">
+                <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+                <path d="M9 3v18"></path>
+                <path d="m14 9 3 3-3 3"></path>
+              </svg>
+            </button>
+          </div>
+          <nav id="sidebar-nav" class="flex-1 overflow-y-auto p-4" aria-label="Módulos">
+            <ul class="menu w-full gap-1">
+              <li>
+                <a href="/elmo/home" data-module-link="home" data-sidebar-tip data-tip="Inicio" aria-label="Inicio">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5 shrink-0">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
+                  </svg>
+                  <span class="sidebar-expanded-only">Inicio</span>
+                </a>
+              </li>
+              <li class="menu-title sidebar-expanded-only mt-2">Órdenes de pedido</li>
+              <li>
+                <a data-module-link="rentorder"
+                   data-sidebar-tip data-tip="Alquiler" aria-label="Alquiler"
+                   hx-get="/elmo/rentorder/create"
+                   hx-target="#main-content"
+                   hx-swap="innerHTML"
+                   hx-push-url="?t=rentorder">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5 shrink-0">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016c.896 0 1.7-.393 2.25-1.015a3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z" />
+                  </svg>
+                  <span class="sidebar-expanded-only">Alquiler</span>
+                </a>
+              </li>
+              <li>
+                <a data-module-link="productionorder"
+                   data-sidebar-tip data-tip="Producción" aria-label="Producción"
+                   hx-get="/elmo/productionorder/create"
+                   hx-target="#main-content"
+                   hx-swap="innerHTML"
+                   hx-push-url="?t=productionorder">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5 shrink-0">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
+                  </svg>
+                  <span class="sidebar-expanded-only">Producción</span>
+                </a>
+              </li>
+              <li class="menu-title sidebar-expanded-only mt-2">Configuración</li>
+<%c++
+  for (const auto& [type, label, path] : {
+      std::tuple{"client", "Clientes", "M17 20h5v-2a4 4 0 0 0-4-4M2 20v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2M12 6a3 3 0 1 1 6 0 3 3 0 0 1-6 0ZM5 6a3 3 0 1 1 6 0 3 3 0 0 1-6 0Z"},
+      {"issuer", "Emisores", "M3 21h18M5 21V5l7-3v19M12 7h7v14M8 7v1m0 3v1m0 3v1m7-6h1m-1 4h1m-1 4h1"},
+      {"contact", "Contactos", "M4 3h16v18H4zM2 7h4m-4 5h4m-4 5h4m5-10a2 2 0 1 1 4 0 2 2 0 0 1-4 0Zm-1 9v-1a3 3 0 0 1 6 0v1"}}) {
+%>
+              <li>
+                <a href="/elmo/home?t=party<%c++ o << type; %>"
+                   data-module-link="party<%c++ o << type; %>"
+                   data-sidebar-tip data-tip="<%c++ o << label; %>" aria-label="<%c++ o << label; %>"
+                   hx-get="/elmo/party/<%c++ o << type; %>/list"
+                   hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=party<%c++ o << type; %>">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="<%c++ o << path; %>" />
+                  </svg>
+                  <span class="sidebar-expanded-only"><%c++ o << label; %></span>
+                </a>
+              </li>
+<%c++ } %>
+              <li>
+                <a data-module-link="formblock"
+                   data-sidebar-tip data-tip="Bloques dinámicos" aria-label="Bloques dinámicos"
+                   hx-get="/elmo/form/block/list"
+                   hx-target="#main-content"
+                   hx-swap="innerHTML"
+                   hx-push-url="?t=formblock">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5 shrink-0">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+                  </svg>
+                  <span class="sidebar-expanded-only">Bloques dinámicos</span>
+                </a>
+              </li>
+              <li>
+                <a href="/elmo/home?t=fieldhelp"
+                   data-module-link="fieldhelp"
+                   data-sidebar-tip data-tip="Ayudas de campos" aria-label="Ayudas de campos"
+                   hx-get="/elmo/help/manage/list"
+                   hx-target="#main-content"
+                   hx-swap="innerHTML"
+                   hx-push-url="?t=fieldhelp">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5 shrink-0" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z" />
+                  </svg>
+                  <span class="sidebar-expanded-only">Ayudas de campos</span>
+                </a>
+              </li>
+            </ul>
+          </nav>
+          <div id="sidebar-footer" class="border-t border-base-300 p-4">
+            <div class="dropdown dropdown-top w-full">
+              <div id="sidebar-user-trigger" tabindex="0" role="button" aria-label="Opciones de usuario" class="flex cursor-pointer items-center gap-3 rounded-box p-1 transition-colors hover:bg-base-200" data-sidebar-tip data-tip="<%c++ o << name_html; %>">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-base-300">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-5 w-5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                  </svg>
+                </div>
+                <div class="sidebar-expanded-only min-w-0 flex-1">
+                  <div class="truncate text-sm font-semibold"><%c++ o << name_html; %></div>
+                  <div class="truncate text-xs text-base-content/60"><%c++ o << username_html; %></div>
+                </div>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="sidebar-expanded-only h-4 w-4 shrink-0 text-base-content/50">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+                </svg>
+              </div>
+              <ul tabindex="-1" class="dropdown-content menu z-50 mb-2 w-56 rounded-box border border-base-300 bg-base-100 p-2 shadow-lg">
+                <li>
+                  <details>
+                    <summary>
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4.098 19.902a3.75 3.75 0 005.304 0l6.401-6.402M6.75 21A3.75 3.75 0 013 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 003.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008z" />
+                      </svg>
+                      Tema
+                    </summary>
+                    <ul class="max-h-48 overflow-y-auto">
+<%c++
+  static constexpr std::pair<const char*, const char*> themes[] = {
+      {"light", "Light"}, {"dark", "Dark"}, {"cupcake", "Cupcake"}, {"bumblebee", "Bumblebee"},
+      {"emerald", "Emerald"}, {"corporate", "Corporate"}, {"synthwave", "Synthwave"}, {"retro", "Retro"},
+      {"cyberpunk", "Cyberpunk"}, {"valentine", "Valentine"}, {"halloween", "Halloween"}, {"garden", "Garden"},
+      {"forest", "Forest"}, {"aqua", "Aqua"}, {"lofi", "Lo-Fi"}, {"pastel", "Pastel"},
+      {"fantasy", "Fantasy"}, {"wireframe", "Wireframe"}, {"black", "Black"}, {"luxury", "Luxury"},
+      {"dracula", "Dracula"}, {"cmyk", "CMYK"}, {"autumn", "Autumn"}, {"business", "Business"},
+      {"acid", "Acid"}, {"lemonade", "Lemonade"}, {"night", "Night"}, {"coffee", "Coffee"},
+      {"winter", "Winter"}, {"dim", "Dim"}, {"nord", "Nord"}, {"sunset", "Sunset"},
+      {"caramellatte", "Caramellatte"}, {"abyss", "Abyss"}, {"silk", "Silk"}};
+  for (const auto& [id, label] : themes) {
+%>
+                      <li><button type="button" class="gap-3 px-2" data-theme-btn="<%c++ o << id; %>" onclick="setTheme('<%c++ o << id; %>')"><div data-theme="<%c++ o << id; %>" class="grid shrink-0 grid-cols-2 gap-0.5 rounded bg-base-100 p-1 shadow-sm"><div class="size-1 rounded-full bg-base-content"></div><div class="size-1 rounded-full bg-primary"></div><div class="size-1 rounded-full bg-secondary"></div><div class="size-1 rounded-full bg-accent"></div></div><span class="flex-1 text-left"><%c++ o << label; %></span><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="invisible h-3 w-3 shrink-0"><path d="M20.285 2l-11.285 11.567-5.286-5.011-3.714 3.716 9 8.728 15-15.285z"/></svg></button></li>
+<%c++ } %>
+                    </ul>
+                  </details>
+                </li>
+                <li>
+                  <button type="submit" form="signout-form" class="text-error">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+                    </svg>
+                    Cerrar sesión
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <form id="signout-form" method="post" action="/elmo/auth/signout" class="hidden"></form>
+    <dialog id="help-dialog" class="modal" aria-labelledby="help-dialog-title">
+      <form id="help-form" class="modal-box space-y-3" novalidate>
+        <h3 id="help-dialog-title" class="text-lg font-bold">Texto de ayuda</h3>
+        <p class="text-sm text-base-content/60">Campo: <span class="font-semibold text-base-content" data-help-caption></span></p>
+        <label class="sr-only" for="help-dialog-text">Texto de ayuda</label>
+        <textarea id="help-dialog-text" name="help_text" class="textarea w-full" rows="4" maxlength="500" placeholder="Describe qué valor se registra en este campo"></textarea>
+        <div class="flex items-center justify-between gap-2 text-xs text-base-content/60">
+          <span>Déjalo vacío para quitar la ayuda.</span>
+          <span data-help-count>0 / 500</span>
+        </div>
+        <div role="alert" class="alert alert-error alert-soft text-sm" data-help-error hidden></div>
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost" onclick="document.getElementById('help-dialog').close()">Cancelar</button>
+          <button type="submit" class="btn btn-primary" data-help-save>Guardar</button>
+        </div>
+      </form>
+      <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
+    </dialog>
+  </body>
+</html>

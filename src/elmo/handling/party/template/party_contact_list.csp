@@ -1,0 +1,52 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  using Rows = std::vector<Row>;
+  auto& o = party_contact_list_tmp_stream;
+  const auto& entity = @@.get<Row>("entity");
+  const auto& rows = @@.get<Rows>("rows");
+  const auto& notice = @@.get<std::string>("notice");
+  const auto& error = @@.get<std::string>("error");
+  auto esc = [](const std::string& value) { return drogon::HttpViewData::htmlTranslate(value); };
+  auto at = [](const Row& row, const std::string& key) { auto it = row.find(key); return it == row.end() ? std::string() : it->second; };
+  const auto base = "/elmo/party/" + at(entity, "type");
+  const auto module = at(entity, "module");
+  auto nav = [&](const std::string& url, const std::string& target_module = "") {
+    const auto m = target_module.empty() ? module : target_module;
+    return "href=\"/elmo/home?t=" + m + "\" hx-get=\"" + esc(url) + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=" + m + "\"";
+  };
+%>
+<div class="space-y-6" data-party-page="list">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-2xl font-bold"><%c++ o << esc(at(entity, "title")); %></h1>
+    <a class="btn btn-sm" <%c++ o << nav(base + "/create"); %>>Nuevo <%c++ o << esc(at(entity, "singular")); %></a>
+  </div>
+<%c++ if (!notice.empty()) { %>
+  <div role="alert" class="alert alert-success"><%c++ o << esc(notice); %></div>
+<%c++ } %>
+<%c++ if (!error.empty()) { %>
+  <div role="alert" class="alert alert-error"><%c++ o << esc(error); %></div>
+<%c++ } %>
+<%c++ if (rows.empty()) { %>
+  <div class="rounded-box border border-dashed border-base-300 p-8 text-center text-base-content/60">Aún no hay registros. Agrega el primero con «Nuevo <%c++ o << esc(at(entity, "singular")); %>».</div>
+<%c++ } else { %>
+  <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+    <table class="table">
+      <thead><tr><th>Nombre</th><th>Empresa</th><th>Cargo</th><th>Teléfono</th><th>Correo</th></tr></thead>
+      <tbody>
+<%c++ for (const auto& row : rows) { %>
+        <tr>
+          <td><a class="link link-hover font-medium" <%c++ o << nav(base + "/" + at(row, "id") + "/details"); %>><%c++ o << esc(at(row, "name")); %></a></td>
+          <td>
+            <a class="link link-hover" <%c++ o << nav("/elmo/party/" + at(row, "owner_type") + "/" + at(row, "owner_id") + "/details", "party" + at(row, "owner_type")); %>><%c++ o << esc(at(row, "owner_name")); %></a>
+            <div class="text-xs text-base-content/60"><%c++ o << (at(row, "owner_type") == "client" ? "Cliente" : "Emisor"); %></div>
+          </td>
+          <td><%c++ o << esc(at(row, "role")); %></td>
+          <td><%c++ o << esc(at(row, "phone")); %></td>
+          <td><%c++ o << esc(at(row, "email")); %></td>
+        </tr>
+<%c++ } %>
+      </tbody>
+    </table>
+  </div>
+<%c++ } %>
+</div>

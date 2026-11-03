@@ -1,0 +1,48 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  using Rows = std::vector<Row>;
+  auto& o = party_company_edit_tmp_stream;
+  const auto& entity = @@.get<Row>("entity");
+  const auto& record = @@.get<Row>("record");
+  auto esc = [](const std::string& value) { return drogon::HttpViewData::htmlTranslate(value); };
+  auto at = [](const Row& row, const std::string& key) { auto it = row.find(key); return it == row.end() ? std::string() : it->second; };
+  const auto base = "/elmo/party/" + at(entity, "type");
+  const auto module = at(entity, "module");
+  auto nav = [&](const std::string& url, const std::string& target_module = "") {
+    const auto m = target_module.empty() ? module : target_module;
+    return "href=\"/elmo/home?t=" + m + "\" hx-get=\"" + esc(url) + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=" + m + "\"";
+  };
+  const auto& errors = @@.get<Row>("errors");
+  const bool creating = @@.get<std::string>("mode") != "edit";
+  const auto action = creating ? base + "/create" : base + "/" + at(record, "id") + "/edit";
+  const auto back = creating ? base + "/list" : base + "/" + at(record, "id") + "/details";
+  auto invalid = [&](const std::string& key) { return errors.contains(key) ? " input-error" : ""; };
+  auto err = [&](const std::string& key) { if (errors.contains(key)) o << "<p class=\"label whitespace-normal text-error\">" << esc(at(errors, key)) << "</p>"; };
+  const bool no_owners = false;
+%>
+<form class="space-y-6" data-party-page="form" hx-post="<%c++ o << action; %>" hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=<%c++ o << module; %>" novalidate>
+  <div class="breadcrumbs text-sm"><ul>
+    <li><a <%c++ o << nav(base + "/list"); %>><%c++ o << esc(at(entity, "title")); %></a></li>
+<%c++ if (!creating) { %>
+    <li><a <%c++ o << nav(back); %>><%c++ o << esc(at(record, "name")); %></a></li>
+<%c++ } %>
+    <li><%c++ o << (creating ? "Nuevo" : "Editar"); %></li>
+  </ul></div>
+  <h1 class="text-2xl font-bold"><%c++ o << (creating ? "Nuevo " : "Editar ") << esc(at(entity, "singular")); %></h1>
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Datos del <%c++ o << esc(at(entity, "singular")); %></legend>
+    <div class="grid gap-4 md:grid-cols-2">
+<%c++ for (const auto& [key, label] : {std::pair{"name", "Razón social"}, {"ruc", "RUC"}, {"address", "Dirección"}, {"district", "Distrito"}}) { const bool required = std::string(key) == "name" || std::string(key) == "ruc"; %>
+      <div>
+        <label class="label" for="party-<%c++ o << key; %>"><%c++ o << label << (required ? " *" : ""); %></label>
+        <input id="party-<%c++ o << key; %>" name="<%c++ o << key; %>" type="text" class="input w-full<%c++ o << invalid(key); %>" value="<%c++ o << esc(at(record, key)); %>"<%c++ if (required) o << " required"; if (std::string(key) == "ruc") o << " inputmode=\"numeric\" maxlength=\"11\" pattern=\"[0-9]{11}\""; %> />
+<%c++ err(key); %>
+      </div>
+<%c++ } %>
+    </div>
+  </fieldset>
+  <div class="flex flex-wrap gap-3">
+    <button type="submit" class="btn"<%c++ if (no_owners) o << " disabled"; %>>Guardar</button>
+    <a class="btn" <%c++ o << nav(back); %>>Cancelar</a>
+  </div>
+</form>

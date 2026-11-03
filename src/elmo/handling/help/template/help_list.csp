@@ -1,0 +1,102 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  using Rows = std::vector<Row>;
+  auto& o = help_list_tmp_stream;
+  const auto& entries = @@.get<Rows>("entries");
+  const auto& notice = @@.get<std::string>("notice");
+  const auto& updated = @@.get<Row>("updated");
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  auto at = [](const Row& r, const char* k) { auto it = r.find(k); return it == r.end() ? std::string() : it->second; };
+  auto nav = [](const std::string& url) { return "href=\"/elmo/home?t=fieldhelp\" hx-get=\"" + url + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=fieldhelp\""; };
+  auto url_key = [](const std::string& k) { return drogon::utils::urlEncodeComponent(k); };
+  std::size_t with_text = 0;
+  for (const auto& e : entries) { if (!at(e, "help_text").empty()) ++with_text; }
+%>
+<div class="space-y-6" data-help-manage>
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Ayudas de campos</h1>
+      <p class="mt-1 text-sm text-base-content/60">Textos que se muestran en el ícono de ayuda de cada campo de las órdenes de pedido. <%c++ o << with_text; %> de <%c++ o << entries.size(); %> campos tienen ayuda.</p>
+    </div>
+  </div>
+
+<%c++ if (!notice.empty()) { %>
+  <div role="alert" class="alert alert-success alert-soft"><%c++ o << esc(notice); %></div>
+<%c++ } %>
+<%c++ if (!at(updated, "key").empty()) { %>
+  <div hidden data-help-updated data-key="<%c++ o << esc(at(updated, "key")); %>" data-text="<%c++ o << esc(at(updated, "help_text")); %>"></div>
+<%c++ } %>
+
+  <label class="input w-full max-w-md">
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4 opacity-60" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+    </svg>
+    <input type="search" class="grow" placeholder="Buscar campo, sección o texto" aria-label="Buscar campo, sección o texto" data-help-search />
+  </label>
+  <p class="hidden rounded-box border border-dashed border-base-300 p-6 text-center text-sm text-base-content/60" data-help-empty>No hay campos que coincidan con la búsqueda.</p>
+
+<%c++
+  std::size_t i = 0;
+  while (i < entries.size()) {
+    const auto section = at(entries[i], "section");
+%>
+  <section class="space-y-2" data-help-section>
+    <h2 class="font-semibold"><%c++ o << esc(section); %></h2>
+    <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th class="w-1/3">Campo</th>
+            <th>Texto de ayuda</th>
+            <th><span class="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+<%c++
+    for (; i < entries.size() && at(entries[i], "section") == section; ++i) {
+      const auto& e = entries[i];
+      const auto text = at(e, "help_text");
+%>
+          <tr data-help-row data-search="<%c++ o << esc(section + " " + at(e, "label") + " " + text); %>">
+            <td class="align-top font-medium">
+              <%c++ o << esc(at(e, "label")); %>
+<%c++ if (at(e, "active") == "0") { %>
+              <span class="badge badge-ghost badge-sm ml-1">Inactivo</span>
+<%c++ } %>
+            </td>
+            <td class="align-top whitespace-pre-line break-words"><%c++ if (text.empty()) { o << "<span class=\"text-base-content/50\">Sin ayuda</span>"; } else { o << esc(text); } %></td>
+            <td class="align-top text-right">
+              <a class="btn btn-ghost btn-xs" <%c++ o << nav("/elmo/help/manage/edit?key=" + url_key(at(e, "key"))); %>>Editar</a>
+            </td>
+          </tr>
+<%c++ } %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+<%c++ } %>
+</div>
+<script>
+  (function () {
+    var root = document.querySelector('[data-help-manage]');
+    if (!root) return;
+    var search = root.querySelector('[data-help-search]');
+    var empty = root.querySelector('[data-help-empty]');
+    function norm(s) { return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+    search.addEventListener('input', function () {
+      var q = norm(search.value.trim());
+      var shown = 0;
+      root.querySelectorAll('[data-help-section]').forEach(function (section) {
+        var visible = 0;
+        section.querySelectorAll('[data-help-row]').forEach(function (row) {
+          var match = !q || norm(row.dataset.search).indexOf(q) !== -1;
+          row.hidden = !match;
+          if (match) visible++;
+        });
+        section.hidden = visible === 0;
+        shown += visible;
+      });
+      empty.classList.toggle('hidden', shown !== 0);
+    });
+  })();
+</script>

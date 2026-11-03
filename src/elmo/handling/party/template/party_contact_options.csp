@@ -1,0 +1,10 @@
+<%c++
+  using Rows = std::vector<std::map<std::string, std::string>>;
+  auto& o = party_contact_options_tmp_stream;
+  auto& contacts = std::any_cast<Rows&>(@@["contacts"]);
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+%>
+<option value="">Selecciona un contacto</option>
+<%c++ for (const auto& c : contacts) { %>
+<option value="<%c++ o << esc(c.at("id")); %>" data-phone="<%c++ o << esc(c.at("phone")); %>" data-email="<%c++ o << esc(c.at("email")); %>"><%c++ o << esc(c.at("name")); if (!c.at("role").empty()) { o << " — " << esc(c.at("role")); } %></option>
+<%c++ } %>

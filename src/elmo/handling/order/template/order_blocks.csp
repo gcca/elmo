@@ -1,0 +1,98 @@
+<%c++
+  using Rows = std::vector<std::map<std::string, std::string>>;
+  auto& o = order_blocks_tmp_stream;
+  auto& blocks = std::any_cast<Rows&>(@@["blocks"]);
+  auto& fields = std::any_cast<Rows&>(@@["fields"]);
+  auto& options = std::any_cast<Rows&>(@@["options"]);
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+%>
+<%c++ if (!blocks.empty()) { %>
+<section class="space-y-4" data-blocks>
+  <h2 class="text-lg font-semibold">Bloques adicionales</h2>
+  <div class="grid gap-4 xl:grid-cols-2">
+<%c++ for (const auto& b : blocks) { %>
+    <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4"<%c++ if (!b.at("contract_kind_id").empty()) { o << " data-contract-kind=\"" << esc(b.at("contract_kind_id")) << "\""; } %>>
+      <legend class="fieldset-legend" data-help="form_block.<%c++ o << esc(b.at("id")); %>"><%c++ o << esc(b.at("title")); %></legend>
+<%c++
+  for (const auto& f : fields) {
+    if (f.at("block_id") != b.at("id")) continue;
+    const auto& type = f.at("type");
+    const bool required = f.at("required") == "1";
+    const auto fname = "field_" + f.at("id");
+    const auto fid = "order-field-" + f.at("id");
+    const char* req = required ? " required" : "";
+    const auto label = esc(f.at("label")) + (required ? " *" : "");
+    const auto help = " data-help=\"form_field." + esc(f.at("id")) + "\"";
+%>
+<%c++ if (type == "boolean") { %>
+      <label class="label mt-2 cursor-pointer gap-3"<%c++ o << help; %>>
+        <input type="checkbox" name="<%c++ o << fname; %>" value="1" class="toggle"<%c++ o << req; %> />
+        <%c++ o << label; %>
+      </label>
+<%c++ } else if (type == "multi_option") { %>
+      <span class="label mt-2"<%c++ o << help; %>><%c++ o << label; %></span>
+      <div class="flex flex-wrap gap-x-4 gap-y-2">
+<%c++   for (const auto& opt : options) { if (opt.at("field_id") != f.at("id")) continue; %>
+        <label class="label cursor-pointer gap-2">
+          <input type="checkbox" name="<%c++ o << fname; %>" value="<%c++ o << esc(opt.at("id")); %>" class="checkbox checkbox-sm" />
+          <%c++ o << esc(opt.at("label")); %>
+        </label>
+<%c++   } %>
+      </div>
+<%c++ } else if (type == "option") { %>
+      <label class="label mt-2" for="<%c++ o << fid; %>"<%c++ o << help; %>><%c++ o << label; %></label>
+      <select id="<%c++ o << fid; %>" name="<%c++ o << fname; %>" class="select w-full"<%c++ o << req; %>>
+        <option value="">Selecciona una opción</option>
+<%c++   for (const auto& opt : options) { if (opt.at("field_id") != f.at("id")) continue; %>
+        <option value="<%c++ o << esc(opt.at("id")); %>"><%c++ o << esc(opt.at("label")); %></option>
+<%c++   } %>
+      </select>
+<%c++ } else if (type == "number") { %>
+      <label class="label mt-2" for="<%c++ o << fid; %>"<%c++ o << help; %>><%c++ o << label; %></label>
+      <input id="<%c++ o << fid; %>" type="number" step="any" name="<%c++ o << fname; %>" class="input w-full"<%c++ o << req; %> />
+<%c++ } else if (type == "date") { %>
+      <label class="label mt-2" for="<%c++ o << fid; %>"<%c++ o << help; %>><%c++ o << label; %></label>
+      <input id="<%c++ o << fid; %>" type="date" name="<%c++ o << fname; %>" class="input w-full"<%c++ o << req; %> />
+<%c++ } else { %>
+      <label class="label mt-2" for="<%c++ o << fid; %>"<%c++ o << help; %>><%c++ o << label; %></label>
+      <input id="<%c++ o << fid; %>" type="text" name="<%c++ o << fname; %>" class="input w-full"<%c++ o << req; %> />
+<%c++ } %>
+<%c++ } %>
+    </fieldset>
+<%c++ } %>
+  </div>
+</section>
+<%c++ } %>
+<section class="space-y-4" data-extra-blocks>
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <h2 class="text-lg font-semibold">Bloques personalizados</h2>
+    <button type="button" class="btn btn-sm" data-extra-block-add>Agregar bloque</button>
+  </div>
+  <p class="rounded-box border border-dashed border-base-300 p-4 text-sm text-base-content/60" data-extra-empty>Agrega un bloque para registrar preguntas adicionales.</p>
+  <div class="grid gap-4 xl:grid-cols-2" data-extra-block-list></div>
+  <template data-extra-block-template>
+    <div class="space-y-3 rounded-box border border-base-300 bg-base-100 p-4" data-extra-block>
+      <div class="flex items-center gap-2">
+        <input type="text" class="input w-full font-semibold" placeholder="Título del bloque" aria-label="Título del bloque" data-extra-title />
+        <button type="button" class="btn btn-ghost btn-sm btn-square" aria-label="Eliminar bloque" data-extra-block-remove>
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+          </svg>
+        </button>
+      </div>
+      <div class="space-y-2" data-extra-line-list></div>
+      <button type="button" class="btn btn-sm btn-ghost" data-extra-line-add>Agregar línea</button>
+    </div>
+  </template>
+  <template data-extra-line-template>
+    <div class="grid items-center gap-2 sm:grid-cols-[1fr_1fr_auto]" data-extra-line>
+      <input type="text" class="input input-sm w-full" placeholder="Pregunta" aria-label="Pregunta" data-extra-col="question" />
+      <input type="text" class="input input-sm w-full" placeholder="Respuesta" aria-label="Respuesta" data-extra-col="answer" />
+      <button type="button" class="btn btn-ghost btn-sm btn-square" aria-label="Eliminar línea" data-extra-line-remove>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-4 w-4">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+  </template>
+</section>

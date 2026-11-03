@@ -1,0 +1,16 @@
+.git
+.github
+.cache
+.agents
+.claude
+.DS_Store
+build
+data
+db
+res
+uploads
+compile_commands.json
+*.o
+*.a
+*.so
+*.dylib

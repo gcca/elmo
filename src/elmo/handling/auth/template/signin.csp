@@ -1,0 +1,104 @@
+<%c++
+  auto& o = signin_tmp_stream;
+  auto& appname = std::any_cast<std::string&>(@@["appname"]);
+  const auto appname_lead = appname.empty() ? 0u : static_cast<unsigned char>(appname[0]);
+  const std::size_t appinitial_len = appname_lead >= 0xF0 ? 4 : appname_lead >= 0xE0 ? 3 : appname_lead >= 0xC0 ? 2 : 1;
+  const auto appname_html = drogon::HttpViewData::htmlTranslate(appname);
+  const auto appinitial_html = drogon::HttpViewData::htmlTranslate(appname.substr(0, appinitial_len));
+  auto& error = std::any_cast<std::string&>(@@["error"]);
+%>
+<!doctype html>
+<html lang="es" data-theme="dim">
+  <head>
+    <script>(function(){var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t);})();</script>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><%c++ o << appname_html; %> | Iniciar sesión</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5.7.50" rel="stylesheet" type="text/css" />
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5.7.50/themes.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.3.4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@4.0.1/dist/htmx.min.js"></script>
+  </head>
+  <body class="min-h-screen bg-base-200">
+    <main class="hero min-h-screen px-4 py-8">
+      <div class="hero-content w-full max-w-5xl flex-col gap-10 lg:flex-row lg:gap-16">
+
+        <section class="w-full max-w-md space-y-6 lg:max-w-none lg:flex-1">
+          <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-box bg-primary text-lg font-bold text-primary-content"><%c++ o << appinitial_html; %></div>
+            <span class="text-xl font-bold tracking-tight"><%c++ o << appname_html; %></span>
+          </div>
+          <h1 class="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
+            Bienvenido a <%c++ o << appname_html; %>
+          </h1>
+          <p class="max-w-sm text-base leading-7 text-base-content/60">
+            Inicia sesión con tu cuenta de Microsoft de la organización.
+          </p>
+        </section>
+
+        <section class="w-full max-w-sm lg:shrink-0">
+          <div class="card border border-base-content/10 bg-base-100 shadow-xl">
+            <div class="card-body gap-6">
+              <h2 class="card-title text-2xl">Iniciar sesión</h2>
+
+<%c++ if (!error.empty()) { %>
+              <div role="alert" class="alert alert-error text-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path fill-rule="evenodd" d="M9.4 3.1c1.2-2.1 4-2.1 5.2 0l8.8 15.2c1.2 2-.3 4.5-2.6 4.5H3.2C.9 22.8-.6 20.3.6 18.3L9.4 3.1zM12 8a1 1 0 0 1 1 1v4a1 1 0 1 1-2 0V9a1 1 0 0 1 1-1zm0 9.5a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4z" clip-rule="evenodd"/>
+                </svg>
+                <span><%c++ o << drogon::HttpViewData::htmlTranslate(error); %></span>
+              </div>
+<%c++ } %>
+
+              <a href="/elmo/auth/otsc" class="btn btn-primary btn-block gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 23 23" class="h-5 w-5 shrink-0" aria-hidden="true">
+                  <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
+                  <path fill="#f35325" d="M1 1h10v10H1z"/>
+                  <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                  <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                  <path fill="#ffba08" d="M12 12h10v10H12z"/>
+                </svg>
+                Iniciar sesión con Microsoft
+              </a>
+
+              <form id="signin-credentials" method="post" action="/elmo/auth/signin"<%c++ if (error.empty()) o << " hidden"; %>>
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">Usuario</legend>
+                  <input name="username" type="text" class="input w-full" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="tu.usuario" required />
+
+                  <legend class="fieldset-legend">Contraseña</legend>
+                  <input name="password" type="password" class="input w-full" autocomplete="current-password" placeholder="••••••••" required />
+
+                  <button type="submit" class="btn btn-block mt-4">Iniciar sesión</button>
+                </fieldset>
+              </form>
+
+              <div class="divider my-0 text-xs text-base-content/40">
+                <button id="signin-credentials-toggle" type="button" class="select-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-base-content" aria-controls="signin-credentials" aria-expanded="<%c++ o << (error.empty() ? "false" : "true"); %>">acceso protegido</button>
+              </div>
+              <p class="text-center text-xs text-base-content/50">
+                ¿Problemas para acceder? Contacta a tu administrador.
+              </p>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+    <script>
+      const credentials = document.getElementById('signin-credentials');
+      const credentialsToggle = document.getElementById('signin-credentials-toggle');
+      function toggleCredentials() {
+        credentials.hidden = !credentials.hidden;
+        credentialsToggle.setAttribute('aria-expanded', String(!credentials.hidden));
+        if (!credentials.hidden) credentials.querySelector('[name="username"]').focus();
+      }
+      credentialsToggle.addEventListener('dblclick', toggleCredentials);
+      credentialsToggle.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        if (!event.repeat) toggleCredentials();
+      });
+    </script>
+  </body>
+</html>

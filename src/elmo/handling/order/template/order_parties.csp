@@ -1,0 +1,78 @@
+<%c++
+  using Rows = std::vector<std::map<std::string, std::string>>;
+  auto& o = order_parties_tmp_stream;
+  auto& clients = std::any_cast<Rows&>(@@["clients"]);
+  auto& issuers = std::any_cast<Rows&>(@@["issuers"]);
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  auto party_option = [&](const std::map<std::string, std::string>& p, bool selected) {
+    o << "<option value=\"" << esc(p.at("id")) << "\" data-ruc=\"" << esc(p.at("ruc"))
+      << "\" data-address=\"" << esc(p.at("address")) << "\" data-district=\"" << esc(p.at("district")) << "\""
+      << (selected ? " selected" : "") << ">" << esc(p.at("name")) << "</option>";
+  };
+  const bool single_issuer = issuers.size() == 1;
+%>
+<div class="grid gap-4 xl:grid-cols-2">
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4" data-party>
+    <legend class="fieldset-legend">Cliente</legend>
+    <label class="label" for="order-client" data-help="order.client_id">Razón social *</label>
+    <select id="order-client" name="client_id" class="select w-full" required data-party-select data-combo
+            hx-get="/elmo/party/contact/options" hx-target="#order-contact" hx-swap="innerHTML">
+      <option value="">Selecciona un cliente</option>
+<%c++ for (const auto& c : clients) { party_option(c, false); } %>
+    </select>
+<%c++ if (clients.empty()) { %>
+    <p class="label text-warning">No hay clientes registrados.</p>
+<%c++ } %>
+    <div class="grid gap-3 sm:grid-cols-4">
+      <div class="sm:col-span-1">
+        <label class="label" data-help="party.ruc">RUC</label>
+        <input type="text" class="input w-full" readonly tabindex="-1" data-party-info="ruc" />
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label" data-help="party.address">Dirección</label>
+        <input type="text" class="input w-full" readonly tabindex="-1" data-party-info="address" />
+      </div>
+      <div class="sm:col-span-1">
+        <label class="label" data-help="party.district">Distrito</label>
+        <input type="text" class="input w-full" readonly tabindex="-1" data-party-info="district" />
+      </div>
+    </div>
+    <label class="label" for="order-brand" data-help="order.brand">Cliente / Marca</label>
+    <input id="order-brand" type="text" name="brand" class="input w-full" />
+    <label class="label" for="order-contact" data-help="order.contact_id">Contacto</label>
+    <select id="order-contact" name="contact_id" class="select w-full" data-combo>
+      <option value="">Selecciona primero un cliente</option>
+    </select>
+  </fieldset>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4" data-party>
+    <legend class="fieldset-legend">Emisor</legend>
+    <label class="label" for="order-issuer" data-help="order.issuer_id">Empresa *</label>
+    <select id="order-issuer" name="issuer_id" class="select w-full" required data-party-select data-combo
+            hx-get="/elmo/party/contact/options" hx-trigger="load, change" hx-target="#order-issuer-contact" hx-swap="innerHTML">
+      <option value="">Selecciona un emisor</option>
+<%c++ for (const auto& i : issuers) { party_option(i, single_issuer); } %>
+    </select>
+<%c++ if (issuers.empty()) { %>
+    <p class="label text-warning">No hay emisores registrados.</p>
+<%c++ } %>
+    <div class="grid gap-3 sm:grid-cols-4">
+      <div class="sm:col-span-1">
+        <label class="label" data-help="party.ruc">RUC</label>
+        <input type="text" class="input w-full" readonly tabindex="-1" data-party-info="ruc" />
+      </div>
+      <div class="sm:col-span-2">
+        <label class="label" data-help="party.address">Dirección</label>
+        <input type="text" class="input w-full" readonly tabindex="-1" data-party-info="address" />
+      </div>
+      <div class="sm:col-span-1">
+        <label class="label" data-help="party.district">Distrito</label>
+        <input type="text" class="input w-full" readonly tabindex="-1" data-party-info="district" />
+      </div>
+    </div>
+    <label class="label" for="order-issuer-contact" data-help="order.issuer_contact_id">Contacto</label>
+    <select id="order-issuer-contact" name="issuer_contact_id" class="select w-full" data-combo>
+      <option value="">Selecciona primero un emisor</option>
+    </select>
+  </fieldset>
+</div>

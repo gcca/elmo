@@ -1,0 +1,76 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  using Rows = std::vector<Row>;
+  auto& o = form_block_list_tmp_stream;
+  const auto& blocks = @@.get<Rows>("blocks");
+  const auto& assignments = @@.get<Rows>("assignments");
+  const auto& notice = @@.get<std::string>("notice");
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  auto at = [](const Row& r, const char* k) { auto it = r.find(k); return it == r.end() ? std::string() : it->second; };
+  auto nav = [](const std::string& url) { return "href=\"/elmo/home?t=formblock\" hx-get=\"" + url + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=formblock\""; };
+%>
+<div class="space-y-6">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold">Bloques dinámicos</h1>
+      <p class="mt-1 text-sm text-base-content/60">Grupos de campos adicionales que aparecen en las órdenes de pedido de Alquiler y Producción.</p>
+    </div>
+    <a class="btn btn-primary btn-sm" <%c++ o << nav("/elmo/form/block/create"); %>>Nuevo bloque</a>
+  </div>
+
+<%c++ if (!notice.empty()) { %>
+  <div role="alert" class="alert alert-success alert-soft"><%c++ o << esc(notice); %></div>
+<%c++ } %>
+
+<%c++ if (blocks.empty()) { %>
+  <div class="rounded-box border border-dashed border-base-300 p-8 text-center text-base-content/60">
+    Aún no hay bloques. Crea el primero con <span class="font-semibold">Nuevo bloque</span>.
+  </div>
+<%c++ } else { %>
+  <div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+    <table class="table table-zebra">
+      <thead>
+        <tr>
+          <th>Título</th>
+          <th>Código</th>
+          <th>Formularios</th>
+          <th class="text-right">Campos</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+<%c++ for (const auto& b : blocks) { %>
+        <tr>
+          <td><a class="link link-hover font-medium" <%c++ o << nav("/elmo/form/block/" + esc(at(b, "id")) + "/details"); %>><%c++ o << esc(at(b, "title")); %></a></td>
+          <td class="font-mono text-sm"><%c++ o << esc(at(b, "code")); %></td>
+          <td>
+            <div class="flex flex-wrap gap-1">
+<%c++   bool any = false;
+        for (const auto& a : assignments) {
+          if (at(a, "block_id") != at(b, "id")) continue;
+          any = true;
+          const bool on = at(a, "active") == "1";
+          const auto family = at(a, "family") == "rent" ? "Alquiler" : "Producción";
+          const auto kind = at(a, "kind_name"); %>
+              <span class="badge badge-sm <%c++ o << (on ? "badge-primary badge-soft" : "badge-ghost line-through"); %>"><%c++ o << family; if (!kind.empty()) { o << " · " << esc(kind); } %></span>
+<%c++   }
+        if (!any) { %>
+              <span class="text-sm text-base-content/50">Sin asignar</span>
+<%c++   } %>
+            </div>
+          </td>
+          <td class="text-right font-mono"><%c++ o << esc(at(b, "field_count")); %></td>
+          <td>
+<%c++   if (at(b, "active") == "1") { %>
+            <span class="badge badge-sm badge-success badge-soft">Activo</span>
+<%c++   } else { %>
+            <span class="badge badge-sm badge-ghost">Inactivo</span>
+<%c++   } %>
+          </td>
+        </tr>
+<%c++ } %>
+      </tbody>
+    </table>
+  </div>
+<%c++ } %>
+</div>
