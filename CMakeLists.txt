@@ -26,6 +26,7 @@ add_executable(
   src/elmo/handling/auth/pbkdf2.cpp
   src/elmo/handling/auth/routes.cpp
   src/elmo/handling/common.cpp
+  src/elmo/handling/form/routes.cpp
   src/elmo/handling/home/routes.cpp
   src/elmo/handling/index/routes.cpp
   src/elmo/handling/party/routes.cpp
@@ -34,6 +35,10 @@ add_executable(
 
 drogon_create_views(elmo
   ${CMAKE_CURRENT_SOURCE_DIR}/src/elmo/handling/auth/template
+  ${CMAKE_CURRENT_BINARY_DIR})
+
+drogon_create_views(elmo
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/elmo/handling/form/template
   ${CMAKE_CURRENT_BINARY_DIR})
 
 drogon_create_views(elmo

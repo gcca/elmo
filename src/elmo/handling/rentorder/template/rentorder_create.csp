@@ -19,8 +19,13 @@
       <h1 class="text-2xl font-bold">Orden de pedido · Alquiler</h1>
       <p class="mt-1 text-sm text-base-content/60">Arrendamiento de espacios de publicidad y de espacios temporales</p>
     </div>
-    <span class="badge badge-outline">Borrador</span>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="badge badge-outline">Borrador</span>
+      <button type="button" class="btn btn-sm btn-ghost" data-sample-fill>Datos de ejemplo</button>
+      <button type="button" class="btn btn-sm" data-pdf-export>Exportar PDF</button>
+    </div>
   </div>
+  <div role="alert" class="alert alert-error alert-soft" data-pdf-error hidden>No se pudo generar el PDF. Revisa tu conexión e inténtalo de nuevo.</div>
 
   <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
     <legend class="fieldset-legend">Encabezado</legend>
@@ -248,7 +253,7 @@ MALL SERVICE devolverá la garantía al Cliente dentro de un plazo máximo de si
   <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
     <legend class="fieldset-legend">Términos y condiciones</legend>
     <label class="label" for="rentorder-terms-ad-space">Arrendamiento de espacio de publicidad</label>
-    <textarea id="rentorder-terms-ad-space" name="terms_ad_space" class="textarea w-full" rows="10">ARRENDAMIENTO DE ESPACIO DE PUBLICIDAD
+    <textarea id="rentorder-terms-ad-space" name="terms_ad_space" class="textarea w-full" rows="10" data-pdf-contract-kind="<%c++ o << esc(ad_space_kind); %>">ARRENDAMIENTO DE ESPACIO DE PUBLICIDAD
 
 1. El Cliente se obliga a remitir el arte en el formato y fechas pactadas con el área de publicidad de MALL SERVICE. MALL SERVICE se reserva el derecho de revisar y aprobar dicho arte. La falta de remisión oportuna del arte publicitario no será imputable a MALL SERVICE ni dará lugar a reprogramaciones, prórrogas, descuentos ni compensaciones respecto del plazo de exhibición contratado.
 
@@ -260,7 +265,7 @@ MALL SERVICE devolverá la garantía al Cliente dentro de un plazo máximo de si
 
 5. El contenido del arte publicitario, incluyendo textos, imágenes, diseños, marcas, signos distintivos y demás elementos utilizados, es de exclusiva responsabilidad del Cliente. MALL SERVICE no asume responsabilidad alguna por el contenido, licitud, veracidad, derechos de autor, derechos de imagen, propiedad intelectual o cualquier derecho de terceros vinculado al arte publicitario, limitándose su participación únicamente a la producción y/o exhibición del material conforme a lo contratado.</textarea>
     <label class="label mt-2" for="rentorder-terms-temp-space">Arrendamiento de espacios temporales</label>
-    <textarea id="rentorder-terms-temp-space" name="terms_temp_space" class="textarea w-full" rows="10">ARRENDAMIENTO DE ESPACIOS TEMPORALES
+    <textarea id="rentorder-terms-temp-space" name="terms_temp_space" class="textarea w-full" rows="10" data-pdf-contract-kind="<%c++ o << esc(temp_space_kind); %>">ARRENDAMIENTO DE ESPACIOS TEMPORALES
 
 1. El Cliente se obliga a remitir a MALL SERVICE, para su revisión y aprobación previa, el proyecto de diseño, volantes y/o cualquier otro insumo destinado a ser entregado a los consumidores. MALL SERVICE contará con un plazo de cinco (5) días hábiles para emitir su aprobación u observaciones. La falta de remisión oportuna del proyecto de diseño y/o actividad no será imputable a MALL SERVICE ni dará lugar a reprogramaciones, prórrogas, descuentos ni compensaciones respecto del plazo de exhibición contratado.
 

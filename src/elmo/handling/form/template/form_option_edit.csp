@@ -1,0 +1,67 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  auto& o = form_option_edit_tmp_stream;
+  const auto& block = @@.get<Row>("block");
+  const auto& field = @@.get<Row>("field");
+  const auto& option = @@.get<Row>("option");
+  const auto& errors = @@.get<Row>("errors");
+  const auto& error = @@.get<std::string>("error");
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  auto at = [](const Row& r, const std::string& k) { auto it = r.find(k); return it == r.end() ? std::string() : it->second; };
+  auto nav = [](const std::string& url) { return "href=\"/elmo/home?t=formblock\" hx-get=\"" + url + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=formblock\""; };
+  auto err = [&](const std::string& k) {
+    const auto e = at(errors, k);
+    if (!e.empty()) o << "<p class=\"label text-error\">" << esc(e) << "</p>";
+  };
+  auto invalid = [&](const std::string& k) { return errors.contains(k) ? " input-error" : ""; };
+  const auto block_id = esc(at(block, "id"));
+  const auto field_id = esc(at(field, "id"));
+  const auto option_id = esc(at(option, "id"));
+  const auto back = "/elmo/form/field/" + field_id + "/details";
+%>
+<form class="space-y-6" hx-post="/elmo/form/option/<%c++ o << option_id; %>/edit" hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=formblock" novalidate>
+  <div class="breadcrumbs text-sm">
+    <ul>
+      <li><a <%c++ o << nav("/elmo/form/block/list"); %>>Bloques dinámicos</a></li>
+      <li><a <%c++ o << nav("/elmo/form/block/" + block_id + "/details"); %>><%c++ o << esc(at(block, "title")); %></a></li>
+      <li><a <%c++ o << nav(back); %>><%c++ o << esc(at(field, "label")); %></a></li>
+      <li>Editar opción</li>
+    </ul>
+  </div>
+
+  <h1 class="text-2xl font-bold">Editar opción</h1>
+
+<%c++ if (!error.empty()) { %>
+  <div role="alert" class="alert alert-error alert-soft"><%c++ o << esc(error); %></div>
+<%c++ } %>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Datos de la opción</legend>
+    <div class="grid gap-3 md:grid-cols-4">
+      <div class="md:col-span-2">
+        <label class="label" for="option-label">Etiqueta *</label>
+        <input id="option-label" type="text" name="label" class="input w-full<%c++ o << invalid("label"); %>" value="<%c++ o << esc(at(option, "label")); %>" maxlength="200" required />
+<%c++ err("label"); %>
+      </div>
+      <div>
+        <label class="label" for="option-code">Código *</label>
+        <input id="option-code" type="text" name="code" class="input w-full font-mono<%c++ o << invalid("code"); %>" value="<%c++ o << esc(at(option, "code")); %>" maxlength="64" pattern="[a-z0-9_]+" required />
+<%c++ err("code"); %>
+      </div>
+      <div>
+        <label class="label" for="option-position">Posición</label>
+        <input id="option-position" type="number" step="1" name="position" class="input w-full<%c++ o << invalid("position"); %>" value="<%c++ o << esc(at(option, "position")); %>" />
+<%c++ err("position"); %>
+      </div>
+    </div>
+    <label class="label mt-2 cursor-pointer gap-3 text-base-content">
+      <input type="checkbox" name="active" value="1" class="toggle toggle-sm"<%c++ if (at(option, "active") == "1") { o << " checked"; } %> />
+      Activa
+    </label>
+  </fieldset>
+
+  <div class="flex flex-wrap items-center justify-end gap-3 border-t border-base-300 pt-4">
+    <a class="btn btn-ghost" <%c++ o << nav(back); %>>Cancelar</a>
+    <button type="submit" class="btn btn-primary">Guardar</button>
+  </div>
+</form>

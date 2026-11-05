@@ -4,6 +4,7 @@
 #include <cctype>
 #include <ctime>
 #include <format>
+#include <type_traits>
 
 #include <trantor/utils/Logger.h>
 
@@ -37,6 +38,59 @@ Rows FetchRows(sqlite3 *db, std::string_view sql,
 
   sqlite3_finalize(stmt);
   return rows;
+}
+
+ExecResult Exec(sqlite3 *db, std::string_view sql,
+                const std::vector<Bind> &binds) {
+  ExecResult result;
+  sqlite3_stmt *stmt = nullptr;
+  if (sqlite3_prepare_v2(db, sql.data(), static_cast<int>(sql.size()), &stmt,
+                         nullptr) != SQLITE_OK) {
+    LOG_ERROR << "[common] prepare error: " << sqlite3_errmsg(db);
+    result.extended_rc = sqlite3_extended_errcode(db);
+    return result;
+  }
+
+  for (std::size_t i = 0; i < binds.size(); ++i) {
+    const int index = static_cast<int>(i + 1);
+    std::visit(
+        [&](const auto &value) {
+          using T = std::decay_t<decltype(value)>;
+          if constexpr (std::is_same_v<T, std::nullptr_t>)
+            sqlite3_bind_null(stmt, index);
+          else if constexpr (std::is_same_v<T, std::int64_t>)
+            sqlite3_bind_int64(stmt, index, value);
+          else
+            sqlite3_bind_text(stmt, index, value.c_str(), -1, SQLITE_TRANSIENT);
+        },
+        binds[i]);
+  }
+
+  result.rc = sqlite3_step(stmt);
+  result.extended_rc = sqlite3_extended_errcode(db);
+  if (result.rc == SQLITE_DONE) {
+    result.last_insert_id = sqlite3_last_insert_rowid(db);
+    result.changes = sqlite3_changes(db);
+  } else if (result.rc != SQLITE_ROW) {
+    LOG_WARN << "[common] step error: " << sqlite3_errmsg(db);
+  }
+
+  sqlite3_finalize(stmt);
+  return result;
+}
+
+bool Begin(sqlite3 *db) {
+  return sqlite3_exec(db, "BEGIN IMMEDIATE", nullptr, nullptr, nullptr) ==
+         SQLITE_OK;
+}
+
+bool Commit(sqlite3 *db) {
+  return sqlite3_exec(db, "COMMIT", nullptr, nullptr, nullptr) == SQLITE_OK;
+}
+
+void Rollback(sqlite3 *db) {
+  if (sqlite3_get_autocommit(db) == 0)
+    sqlite3_exec(db, "ROLLBACK", nullptr, nullptr, nullptr);
 }
 
 Rows FetchClients(sqlite3 *db) {
@@ -86,6 +140,14 @@ bool IsId(std::string_view value) {
   return !value.empty() && value.size() <= 18 &&
          std::ranges::all_of(
              value, [](unsigned char ch) { return std::isdigit(ch) != 0; });
+}
+
+bool IsCode(std::string_view value) {
+  return !value.empty() && value.size() <= 64 &&
+         std::ranges::all_of(value, [](unsigned char ch) {
+           return (ch >= 'a' && ch <= 'z') || std::isdigit(ch) != 0 ||
+                  ch == '_';
+         });
 }
 
 std::string Today() {

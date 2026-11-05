@@ -1,0 +1,174 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  using Rows = std::vector<Row>;
+  auto& o = form_field_details_tmp_stream;
+  const auto& block = @@.get<Row>("block");
+  const auto& field = @@.get<Row>("field");
+  const auto& options = @@.get<Rows>("options");
+  const auto& option_form = @@.get<Row>("option_form");
+  const auto& option_errors = @@.get<Row>("option_errors");
+  const auto& type_labels = @@.get<Row>("type_labels");
+  const auto& notice = @@.get<std::string>("notice");
+  const auto& error = @@.get<std::string>("error");
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  auto at = [](const Row& r, const std::string& k) { auto it = r.find(k); return it == r.end() ? std::string() : it->second; };
+  auto nav = [](const std::string& url) { return "href=\"/elmo/home?t=formblock\" hx-get=\"" + url + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=formblock\""; };
+  auto err = [&](const std::string& k) {
+    const auto e = at(option_errors, k);
+    if (!e.empty()) o << "<p class=\"label text-error\">" << esc(e) << "</p>";
+  };
+  auto invalid = [&](const std::string& k) { return option_errors.contains(k) ? " input-error" : ""; };
+  const auto block_id = esc(at(block, "id"));
+  const auto field_id = esc(at(field, "id"));
+  const auto type = at(field, "type");
+  const bool has_options = type == "option" || type == "multi_option";
+  const bool active = at(field, "active") == "1";
+%>
+<div class="space-y-6">
+  <div class="breadcrumbs text-sm">
+    <ul>
+      <li><a <%c++ o << nav("/elmo/form/block/list"); %>>Bloques dinámicos</a></li>
+      <li><a <%c++ o << nav("/elmo/form/block/" + block_id + "/details"); %>><%c++ o << esc(at(block, "title")); %></a></li>
+      <li><%c++ o << esc(at(field, "label")); %></li>
+    </ul>
+  </div>
+
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-bold"><%c++ o << esc(at(field, "label")); %></h1>
+      <p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-base-content/60">
+        <span class="font-mono"><%c++ o << esc(at(field, "code")); %></span>
+        <span class="badge badge-sm badge-outline"><%c++ o << esc(at(type_labels, type)); %></span>
+<%c++ if (at(field, "required") == "1") { %>
+        <span class="badge badge-sm badge-warning badge-soft">Obligatorio</span>
+<%c++ } %>
+        <span class="badge badge-sm <%c++ o << (active ? "badge-success badge-soft" : "badge-ghost"); %>"><%c++ o << (active ? "Activo" : "Inactivo"); %></span>
+      </p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a class="btn btn-sm" <%c++ o << nav("/elmo/form/field/" + field_id + "/edit"); %>>Editar</a>
+      <button type="button" class="btn btn-sm btn-error btn-outline" onclick="document.getElementById('field-delete-modal').showModal()">Eliminar</button>
+    </div>
+  </div>
+
+<%c++ if (!notice.empty()) { %>
+  <div role="alert" class="alert alert-success alert-soft"><%c++ o << esc(notice); %></div>
+<%c++ } %>
+<%c++ if (!error.empty()) { %>
+  <div role="alert" class="alert alert-error alert-soft"><%c++ o << esc(error); %></div>
+<%c++ } %>
+
+  <div class="stats stats-vertical w-full border border-base-300 bg-base-100 sm:stats-horizontal">
+    <div class="stat">
+      <div class="stat-title">Posición</div>
+      <div class="stat-value text-2xl"><%c++ o << esc(at(field, "position")); %></div>
+    </div>
+    <div class="stat">
+      <div class="stat-title">Valores guardados</div>
+      <div class="stat-value text-2xl"><%c++ o << esc(at(field, "value_count")); %></div>
+      <div class="stat-desc">en órdenes de pedido</div>
+    </div>
+<%c++ if (has_options) { %>
+    <div class="stat">
+      <div class="stat-title">Opciones</div>
+      <div class="stat-value text-2xl"><%c++ o << esc(at(field, "option_count")); %></div>
+    </div>
+<%c++ } %>
+  </div>
+
+<%c++ if (has_options) { %>
+  <section class="space-y-3 rounded-box border border-base-300 bg-base-100 p-4">
+    <h2 class="font-semibold">Opciones</h2>
+<%c++   if (options.empty()) { %>
+    <p class="text-sm text-base-content/60">Agrega al menos una opción para que el campo se pueda elegir.</p>
+<%c++   } else { %>
+    <div class="overflow-x-auto">
+      <table class="table table-zebra table-sm">
+        <thead>
+          <tr>
+            <th class="text-right">Pos.</th>
+            <th>Etiqueta</th>
+            <th>Código</th>
+            <th class="text-right">Usos</th>
+            <th>Estado</th>
+            <th><span class="sr-only">Acciones</span></th>
+          </tr>
+        </thead>
+        <tbody>
+<%c++     for (const auto& opt : options) { const bool on = at(opt, "active") == "1"; const auto oid = esc(at(opt, "id")); %>
+          <tr>
+            <td class="text-right font-mono"><%c++ o << esc(at(opt, "position")); %></td>
+            <td><%c++ o << esc(at(opt, "label")); %></td>
+            <td class="font-mono text-sm"><%c++ o << esc(at(opt, "code")); %></td>
+            <td class="text-right font-mono"><%c++ o << esc(at(opt, "value_count")); %></td>
+            <td><span class="badge badge-sm <%c++ o << (on ? "badge-success badge-soft" : "badge-ghost"); %>"><%c++ o << (on ? "Activa" : "Inactiva"); %></span></td>
+            <td class="whitespace-nowrap text-right">
+              <a class="btn btn-ghost btn-xs" <%c++ o << nav("/elmo/form/option/" + oid + "/edit"); %>>Editar</a>
+              <button type="button" class="btn btn-ghost btn-xs text-error" onclick="document.getElementById('option-delete-modal-<%c++ o << oid; %>').showModal()">Eliminar</button>
+              <dialog id="option-delete-modal-<%c++ o << oid; %>" class="modal text-left">
+                <div class="modal-box">
+                  <h3 class="text-lg font-bold">¿Eliminar la opción?</h3>
+                  <p class="whitespace-normal py-4 text-sm">Se eliminará «<%c++ o << esc(at(opt, "label")); %>». Si ya fue elegida en alguna orden no se podrá eliminar; en ese caso desactívala.</p>
+                  <div class="modal-action">
+                    <form method="dialog"><button class="btn">Cancelar</button></form>
+                    <button type="button" class="btn btn-error"
+                            hx-post="/elmo/form/option/<%c++ o << oid; %>/delete"
+                            hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=formblock"
+                            onclick="this.closest('dialog').close()">Eliminar</button>
+                  </div>
+                </div>
+                <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
+              </dialog>
+            </td>
+          </tr>
+<%c++     } %>
+        </tbody>
+      </table>
+    </div>
+<%c++   } %>
+
+    <form class="rounded-box border border-dashed border-base-300 p-4" hx-post="/elmo/form/field/<%c++ o << field_id; %>/option/create" hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=formblock" novalidate>
+      <h3 class="mb-2 text-sm font-semibold">Nueva opción</h3>
+      <div class="grid gap-3 md:grid-cols-4">
+        <div class="md:col-span-2">
+          <label class="label" for="option-label">Etiqueta *</label>
+          <input id="option-label" type="text" name="label" class="input w-full<%c++ o << invalid("label"); %>" value="<%c++ o << esc(at(option_form, "label")); %>" maxlength="200" required />
+<%c++ err("label"); %>
+        </div>
+        <div>
+          <label class="label" for="option-code">Código *</label>
+          <input id="option-code" type="text" name="code" class="input w-full font-mono<%c++ o << invalid("code"); %>" value="<%c++ o << esc(at(option_form, "code")); %>" maxlength="64" pattern="[a-z0-9_]+" required />
+<%c++ err("code"); %>
+        </div>
+        <div>
+          <label class="label" for="option-position">Posición</label>
+          <input id="option-position" type="number" step="1" name="position" class="input w-full<%c++ o << invalid("position"); %>" value="<%c++ o << esc(at(option_form, "position")); %>" />
+<%c++ err("position"); %>
+        </div>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+        <label class="label cursor-pointer gap-3 text-base-content">
+          <input type="checkbox" name="active" value="1" class="toggle toggle-sm"<%c++ if (at(option_form, "active") == "1") { o << " checked"; } %> />
+          Activa
+        </label>
+        <button type="submit" class="btn btn-sm btn-primary">Agregar opción</button>
+      </div>
+    </form>
+  </section>
+<%c++ } %>
+
+  <dialog id="field-delete-modal" class="modal">
+    <div class="modal-box">
+      <h3 class="text-lg font-bold">¿Eliminar el campo?</h3>
+      <p class="py-4 text-sm">Se eliminarán «<%c++ o << esc(at(field, "label")); %>» y sus opciones. Si alguna orden ya guardó un valor para este campo no se podrá eliminar; en ese caso desactívalo.</p>
+      <div class="modal-action">
+        <form method="dialog"><button class="btn">Cancelar</button></form>
+        <button type="button" class="btn btn-error"
+                hx-post="/elmo/form/field/<%c++ o << field_id; %>/delete"
+                hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=formblock"
+                onclick="this.closest('dialog').close()">Eliminar</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button>Cerrar</button></form>
+  </dialog>
+</div>

@@ -1,0 +1,97 @@
+<%c++
+  using Row = std::map<std::string, std::string>;
+  auto& o = form_field_edit_tmp_stream;
+  const auto& mode = @@.get<std::string>("mode");
+  const auto& block = @@.get<Row>("block");
+  const auto& field = @@.get<Row>("field");
+  const bool type_locked = @@.get<bool>("type_locked");
+  const auto& type_labels = @@.get<Row>("type_labels");
+  const auto& errors = @@.get<Row>("errors");
+  const auto& error = @@.get<std::string>("error");
+  auto esc = [](const std::string& s) { return drogon::HttpViewData::htmlTranslate(s); };
+  auto at = [](const Row& r, const std::string& k) { auto it = r.find(k); return it == r.end() ? std::string() : it->second; };
+  auto nav = [](const std::string& url) { return "href=\"/elmo/home?t=formblock\" hx-get=\"" + url + "\" hx-target=\"#main-content\" hx-swap=\"innerHTML\" hx-push-url=\"?t=formblock\""; };
+  const bool creating = mode != "edit";
+  const auto block_id = esc(at(block, "id"));
+  const auto field_id = esc(at(field, "id"));
+  const auto action = creating ? "/elmo/form/block/" + block_id + "/field/create" : "/elmo/form/field/" + field_id + "/edit";
+  const auto back = creating ? "/elmo/form/block/" + block_id + "/details" : "/elmo/form/field/" + field_id + "/details";
+  const auto current_type = at(field, "type");
+  auto err = [&](const std::string& k) {
+    const auto e = at(errors, k);
+    if (!e.empty()) o << "<p class=\"label text-error\">" << esc(e) << "</p>";
+  };
+  auto invalid = [&](const std::string& k) { return errors.contains(k) ? " input-error" : ""; };
+  auto checked = [&](const std::string& k) { return at(field, k) == "1" ? " checked" : ""; };
+  static constexpr const char* type_order[] = {"text", "number", "date", "boolean", "option", "multi_option"};
+%>
+<form class="space-y-6" hx-post="<%c++ o << action; %>" hx-target="#main-content" hx-swap="innerHTML" hx-push-url="?t=formblock" novalidate>
+  <div class="breadcrumbs text-sm">
+    <ul>
+      <li><a <%c++ o << nav("/elmo/form/block/list"); %>>Bloques dinámicos</a></li>
+      <li><a <%c++ o << nav("/elmo/form/block/" + block_id + "/details"); %>><%c++ o << esc(at(block, "title")); %></a></li>
+<%c++ if (!creating) { %>
+      <li><a <%c++ o << nav(back); %>><%c++ o << esc(at(field, "label")); %></a></li>
+<%c++ } %>
+      <li><%c++ o << (creating ? "Nuevo campo" : "Editar"); %></li>
+    </ul>
+  </div>
+
+  <h1 class="text-2xl font-bold"><%c++ o << (creating ? "Nuevo campo" : "Editar campo"); %></h1>
+
+<%c++ if (!error.empty()) { %>
+  <div role="alert" class="alert alert-error alert-soft"><%c++ o << esc(error); %></div>
+<%c++ } %>
+
+  <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
+    <legend class="fieldset-legend">Datos del campo</legend>
+    <div class="grid gap-3 md:grid-cols-2">
+      <div>
+        <label class="label" for="field-label">Etiqueta *</label>
+        <input id="field-label" type="text" name="label" class="input w-full<%c++ o << invalid("label"); %>" value="<%c++ o << esc(at(field, "label")); %>" maxlength="200" required />
+<%c++ err("label"); %>
+      </div>
+      <div>
+        <label class="label" for="field-code">Código *</label>
+        <input id="field-code" type="text" name="code" class="input w-full font-mono<%c++ o << invalid("code"); %>" value="<%c++ o << esc(at(field, "code")); %>" maxlength="64" pattern="[a-z0-9_]+" required />
+<%c++ if (errors.contains("code")) { err("code"); } else { %>
+        <p class="label">Minúsculas, números y _; único dentro del bloque.</p>
+<%c++ } %>
+      </div>
+      <div>
+        <label class="label" for="field-type">Tipo *</label>
+        <select id="field-type" name="type" class="select w-full<%c++ o << invalid("type"); %>"<%c++ if (type_locked) { o << " disabled"; } %>>
+<%c++ for (const char* t : type_order) { %>
+          <option value="<%c++ o << t; %>"<%c++ if (current_type == t) { o << " selected"; } %>><%c++ o << esc(at(type_labels, t)); %></option>
+<%c++ } %>
+        </select>
+<%c++ if (type_locked) { %>
+        <p class="label">El tipo no se puede cambiar porque el campo ya tiene opciones o valores guardados.</p>
+<%c++ } else { %>
+        <p class="label">Opción única y múltiple requieren registrar opciones después de guardar.</p>
+<%c++ } %>
+<%c++ err("type"); %>
+      </div>
+      <div>
+        <label class="label" for="field-position">Posición</label>
+        <input id="field-position" type="number" step="1" name="position" class="input w-full<%c++ o << invalid("position"); %>" value="<%c++ o << esc(at(field, "position")); %>" />
+<%c++ err("position"); %>
+      </div>
+    </div>
+    <div class="mt-2 flex flex-wrap gap-6">
+      <label class="label cursor-pointer gap-3 text-base-content">
+        <input type="checkbox" name="required" value="1" class="toggle toggle-sm"<%c++ o << checked("required"); %> />
+        Obligatorio
+      </label>
+      <label class="label cursor-pointer gap-3 text-base-content">
+        <input type="checkbox" name="active" value="1" class="toggle toggle-sm"<%c++ o << checked("active"); %> />
+        Activo
+      </label>
+    </div>
+  </fieldset>
+
+  <div class="flex flex-wrap items-center justify-end gap-3 border-t border-base-300 pt-4">
+    <a class="btn btn-ghost" <%c++ o << nav(back); %>>Cancelar</a>
+    <button type="submit" class="btn btn-primary">Guardar</button>
+  </div>
+</form>

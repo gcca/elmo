@@ -13,8 +13,13 @@
       <h1 class="text-2xl font-bold">Orden de pedido · Producción</h1>
       <p class="mt-1 text-sm text-base-content/60">Servicios de producción</p>
     </div>
-    <span class="badge badge-outline">Borrador</span>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="badge badge-outline">Borrador</span>
+      <button type="button" class="btn btn-sm btn-ghost" data-sample-fill>Datos de ejemplo</button>
+      <button type="button" class="btn btn-sm" data-pdf-export>Exportar PDF</button>
+    </div>
   </div>
+  <div role="alert" class="alert alert-error alert-soft" data-pdf-error hidden>No se pudo generar el PDF. Revisa tu conexión e inténtalo de nuevo.</div>
 
   <fieldset class="fieldset rounded-box border border-base-300 bg-base-100 p-4">
     <legend class="fieldset-legend">Encabezado</legend>
