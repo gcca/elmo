@@ -391,7 +391,7 @@
       return {
         pageSize: 'A4',
         pageMargins: [30, 36, 30, 46],
-        info: { title: h1 ? clean(h1.textContent) : 'Orden de pedido' },
+        info: { title: pdfName() },
         content: content,
         defaultStyle: { fontSize: 9 },
         styles: {
@@ -417,14 +417,20 @@
     function exportPdf(button) {
       var error = form.querySelector('[data-pdf-error]');
       if (error) error.hidden = true;
+      var preview = window.open('', '_blank');
       var spinner = document.createElement('span');
       spinner.className = 'loading loading-spinner loading-xs';
       button.disabled = true;
       button.prepend(spinner);
       return loadPdfMake()
-        .then(function (pdfMake) { return pdfMake.createPdf(buildDoc()).download(pdfName()); })
+        .then(function (pdfMake) {
+          var pdf = pdfMake.createPdf(buildDoc());
+          if (preview) return pdf.open(preview);
+          return pdf.download(pdfName());
+        })
         .catch(function (err) {
           console.error(err);
+          if (preview && !preview.closed) preview.close();
           if (error) error.hidden = false;
         })
         .finally(function () {
